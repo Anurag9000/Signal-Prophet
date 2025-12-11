@@ -25,10 +25,10 @@ const ROCExplorer = () => {
     const [analysis, setAnalysis] = useState({ stable: true, html: "System is stable (no poles)." });
     const [updateKey, setUpdateKey] = useState(0);
 
-    // 3D Visualization State
     const [viewMode, setViewMode] = useState('2d'); // '2d' | '3d'
     const [surfaceData, setSurfaceData] = useState(null);
     const [loading3d, setLoading3d] = useState(false);
+    const [error3d, setError3d] = useState(null);
 
     // Transfer function input
     const [transferFunction, setTransferFunction] = useState('');
@@ -153,6 +153,7 @@ const ROCExplorer = () => {
         if (viewMode === '3d') {
             const fetchSurface = async () => {
                 setLoading3d(true);
+                setError3d(null);
                 try {
                     const res = await fetch('http://localhost:8000/roc/surface', {
                         method: 'POST',
@@ -165,10 +166,16 @@ const ROCExplorer = () => {
                             roc_type: causality
                         })
                     });
+
+                    if (!res.ok) throw new Error(`Backend Error: ${res.statusText}`);
+
                     const data = await res.json();
+                    if (!data.z || !data.x || !data.y) throw new Error("Invalid 3D Data Structure");
+
                     setSurfaceData(data);
                 } catch (e) {
                     console.error("Failed to load 3D surface", e);
+                    setError3d(e.message);
                 }
                 setLoading3d(false);
             };
@@ -559,49 +566,55 @@ const ROCExplorer = () => {
                 <div className="flex-1 relative w-full h-full">
                     {viewMode === '2d' ? (
                         <Scatter key={updateKey} data={data} options={options} plugins={[rocPlugin, axesPlugin]} />
+                    ) : loading3d ? (
+                        <div className="absolute inset-0 flex items-center justify-center bg-white/80 z-10">
+                            <span className="animate-spin text-2xl">🌀</span>
+                        </div>
+                    ) : error3d ? (
+                        <div className="absolute inset-0 flex flex-col items-center justify-center bg-red-50 z-10 p-4 text-center">
+                            <span className="text-3xl mb-2">⚠️</span>
+                            <p className="text-red-800 font-bold mb-1">Failed to Load 3D Plot</p>
+                            <p className="text-red-600 text-sm">{error3d}</p>
+                            <button onClick={() => setViewMode('2d')} className="mt-4 px-3 py-1 bg-white border border-red-200 text-red-700 rounded shadow-sm hover:bg-red-50 text-xs">Return to 2D</button>
+                        </div>
                     ) : (
-                        loading3d ? (
-                            <div className="absolute inset-0 flex items-center justify-center bg-white/80 z-10">
-                                <span className="animate-spin text-2xl">🌀</span>
-                            </div>
-                        ) : (
-                            surfaceData && (
-                                <Plot
-                                    data={[{
-                                        type: 'surface',
-                                        x: surfaceData.x,
-                                        y: surfaceData.y,
-                                        z: surfaceData.z,
-                                        colorscale: 'Viridis',
-                                        showscale: false,
-                                        contours: {
-                                            z: { show: true, usecolormap: true, highlightcolor: "#42f462", project: { z: true } }
-                                        }
-                                    }]}
-                                    layout={{
-                                        autosize: true,
-                                        margin: { l: 0, r: 0, b: 0, t: 0 },
-                                        scene: {
-                                            xaxis: { title: domain === 'laplace' ? 'σ (Sigma)' : 'r (Magnitude)' },
-                                            yaxis: { title: 'jω (Freq)' },
-                                            zaxis: { title: domain === 'laplace' ? '|X(s)|' : '|X(z)|' },
-                                            aspectratio: { x: 1, y: 1, z: 0.7 }
-                                        },
-                                        annotations: (poles.length === 0 && zeros.length === 0) ? [{
-                                            text: "No Poles/Zeros defined.<br>Plotting flat response.",
-                                            x: 0, y: 0, z: 5,
-                                            showarrow: false,
-                                            font: { size: 14, color: 'red' },
-                                            bgcolor: 'rgba(255,255,255,0.8)',
-                                            bordercolor: 'red',
-                                            borderwidth: 1
-                                        }] : []
-                                    }}
-                                    useResizeHandler={true}
-                                    style={{ width: "100%", height: "100%" }}
-                                />
-                            )
+                        surfaceData && (
+                            <Plot
+                                data={[{
+                                    type: 'surface',
+                                    x: surfaceData.x,
+                                    y: surfaceData.y,
+                                    z: surfaceData.z,
+                                    colorscale: 'Viridis',
+                                    showscale: false,
+                                    contours: {
+                                        z: { show: true, usecolormap: true, highlightcolor: "#42f462", project: { z: true } }
+                                    }
+                                }]}
+                                layout={{
+                                    autosize: true,
+                                    margin: { l: 0, r: 0, b: 0, t: 0 },
+                                    scene: {
+                                        xaxis: { title: domain === 'laplace' ? 'σ (Sigma)' : 'r (Magnitude)' },
+                                        yaxis: { title: 'jω (Freq)' },
+                                        zaxis: { title: domain === 'laplace' ? '|X(s)|' : '|X(z)|' },
+                                        aspectratio: { x: 1, y: 1, z: 0.7 }
+                                    },
+                                    annotations: (poles.length === 0 && zeros.length === 0) ? [{
+                                        text: "No Poles/Zeros defined.<br>Plotting flat response.",
+                                        x: 0, y: 0, z: 5,
+                                        showarrow: false,
+                                        font: { size: 14, color: 'red' },
+                                        bgcolor: 'rgba(255,255,255,0.8)',
+                                        bordercolor: 'red',
+                                        borderwidth: 1
+                                    }] : []
+                                }}
+                                useResizeHandler={true}
+                                style={{ width: "100%", height: "100%" }}
+                            />
                         )
+                    )
                     )}
                 </div>
             </div>
