@@ -22,6 +22,20 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+class ParseRequest(BaseModel):
+    expression: str
+    variable: str = 's'
+
+@app.post("/parse_transfer_function")
+def parse_transfer_function(req: ParseRequest):
+    try:
+        data = symbolic.extract_poles_zeros(req.expression, req.variable)
+        if "error" in data:
+            raise HTTPException(status_code=400, detail=data["error"])
+        return data
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
 class PlotRequest(BaseModel):
     expression: str
     t_min: float = -5.0
@@ -54,6 +68,7 @@ class ROC3DRequest(BaseModel):
     gain: float = 1.0
     domain: str # 'laplace' | 'z'
     roc_type: str # 'causal' | 'anticausal'
+    plot_range: float = 10.0 # Default range
 
 @app.get("/")
 def read_root():
@@ -375,8 +390,7 @@ def fourier_synthesize(req: FourierSynthesisRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-if __name__ == "__main__":
-    uvicorn.run("api.main:app", host="0.0.0.0", port=8000, reload=True)
+
 @app.post("/roc/surface")
 def get_roc_surface(req: ROC3DRequest):
     try:
@@ -385,8 +399,11 @@ def get_roc_surface(req: ROC3DRequest):
         zeros_c = [complex(z['r'], z['i']) for z in req.zeros]
         
         data = roc_3d.calculate_roc_surface(
-            poles_c, zeros_c, req.gain, req.domain, req.roc_type
+            poles_c, zeros_c, req.gain, req.domain, req.roc_type, plot_range=req.plot_range
         )
         return data
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+if __name__ == "__main__":
+    uvicorn.run("api.main:app", host="0.0.0.0", port=8000, reload=True)

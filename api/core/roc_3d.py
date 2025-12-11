@@ -1,7 +1,7 @@
 
 import numpy as np
 
-def calculate_roc_surface(poles, zeros, gain, domain, roc_type, points=50):
+def calculate_roc_surface(poles, zeros, gain, domain, roc_type, points=50, plot_range=10.0):
     """
     Generates X, Y, Z data for 3D surface plot of |H(s)| or |H(z)|.
     
@@ -12,6 +12,7 @@ def calculate_roc_surface(poles, zeros, gain, domain, roc_type, points=50):
         domain (str): 'laplace' or 'z'.
         roc_type (str): 'causal' or 'anticausal'.
         points (int): Grid resolution.
+        plot_range (float): Max range for the plot (auto-scaled if not provided/defaulted, but we'll use input).
         
     Returns:
         dict: {x: list, y: list, z: list} (lists of lists for Plotly)
@@ -19,10 +20,15 @@ def calculate_roc_surface(poles, zeros, gain, domain, roc_type, points=50):
     # Define Grid
     if domain == 'laplace':
         # s = sigma + j*omega
-        # Range logic: encompass all poles/zeros + buffer
-        all_pts = poles + zeros + [0] # Ensure 0 is included
-        max_r = max([abs(p.real) for p in all_pts] + [2]) + 1
-        max_i = max([abs(p.imag) for p in all_pts] + [5]) + 1
+        # Use plot_range to determine extent
+        
+        # We can still ensure it covers poles if range is too small, but user wants control.
+        # Let's strictly respect plot_range if it seems reasonable, or maybe add it to max pole.
+        # User request: "entire plane where there are values" -> likely wants to Zoom Out.
+        # So we just use plot_range as the +/- limit.
+        
+        max_r = plot_range
+        max_i = plot_range
         
         x_vals = np.linspace(-max_r, max_r, points)  # Sigma
         y_vals = np.linspace(-max_i, max_i, points)  # j*Omega
@@ -31,9 +37,10 @@ def calculate_roc_surface(poles, zeros, gain, domain, roc_type, points=50):
         
     else: # z-transform
         # z = r * e^(j*omega)
-        # Plot vs r and omega
-        all_pts = poles + zeros + [0]
-        max_r = max([abs(p) for p in all_pts] + [1.5]) + 1
+        max_r = plot_range
+        # For Z-plane, we usually plot unit circle area. Range 10 is huge for Z but fine if requested.
+        # Z-transform is typically within unit circle or slightly outside. 
+        # But for stability analysis, poles can be anywhere.
         
         r_vals = np.linspace(0, max_r, points) # r
         w_vals = np.linspace(-np.pi, np.pi, points) # omega
@@ -99,8 +106,12 @@ def calculate_roc_surface(poles, zeros, gain, domain, roc_type, points=50):
     H_mag_masked = np.where(mask, H_mag, np.nan)
 
     # Convert to lists for JSON serialization
+    z_list = H_mag_masked.tolist()
+    # Replace nan with None for valid JSON
+    z_list_clean = [[(val if not np.isnan(val) else None) for val in row] for row in z_list]
+
     return {
         "x": x_vals.tolist() if domain == 'laplace' else r_vals.tolist(),
         "y": y_vals.tolist() if domain == 'laplace' else w_vals.tolist(),
-        "z": H_mag_masked.tolist()
+        "z": z_list_clean
     }

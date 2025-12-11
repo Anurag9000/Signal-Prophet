@@ -706,7 +706,44 @@ def compute_convolution(x_str: str, h_str: str, domain: str = 'continuous'):
 
 # TODO: Add Z-Transform logic (SymPy doesn't have a direct z_transform function in older versions, 
 # might need manual summation or summation wrapper)
-def compute_z(expr_str: str):
-    # This is complex in pure SymPy without external helpers for one-sided/two-sided
-    # We will implement a basic summation for common table lookups later if needed.
     return "Z-Transform Logic Placeholder"
+
+def extract_poles_zeros(expr_str: str, variable: str):
+    """
+    Parses H(s) or H(z) and extracts numerical poles and zeros.
+    Returns:
+        poles: list of {r, i} dicts
+        zeros: list of {r, i} dicts
+    """
+    try:
+        var_sym = symbols(variable)
+        # Parse expression, robustly handling ^ for power
+        valid_expr = expr_str.replace('^', '**')
+        expr = parse_expr(valid_expr, transformations=standard_transformations + (implicit_multiplication_application,))
+        
+        # Simplify to rational form P/Q
+        rational_expr = expr.simplify()
+        
+        numer, denom = rational_expr.as_numer_denom()
+        
+        # Find roots
+        # roots() returns dict {root: multiplicity} or fails if not polynomial
+        # solve() is safer for general cases
+        from sympy import solve
+        
+        zeros_roots = solve(numer, var_sym)
+        poles_roots = solve(denom, var_sym)
+        
+        # Helper to format complex number
+        def format_root(r):
+            val = complex(r) # evaluate to complex float
+            return {"r": val.real, "i": val.imag}
+            
+        zeros_list = [format_root(z) for z in zeros_roots]
+        poles_list = [format_root(p) for p in poles_roots]
+        
+        return {"poles": poles_list, "zeros": zeros_list}
+        
+    except Exception as e:
+        print(f"Error extracting poles/zeros: {e}")
+        return {"error": str(e)}

@@ -29,6 +29,7 @@ const ROCExplorer = () => {
     const [surfaceData, setSurfaceData] = useState(null);
     const [loading3d, setLoading3d] = useState(false);
     const [error3d, setError3d] = useState(null);
+    const [plotRange, setPlotRange] = useState(10);
 
     // Transfer function input
     const [transferFunction, setTransferFunction] = useState('');
@@ -163,7 +164,8 @@ const ROCExplorer = () => {
                             zeros,
                             gain: 1.0,
                             domain,
-                            roc_type: causality
+                            roc_type: causality,
+                            plot_range: plotRange
                         })
                     });
 
@@ -181,7 +183,7 @@ const ROCExplorer = () => {
             };
             fetchSurface();
         }
-    }, [viewMode, poles, zeros, domain, causality]);
+    }, [viewMode, poles, zeros, domain, causality, plotRange]);
 
     // --- Chart Plugins ---
     const rocPlugin = {
@@ -544,7 +546,23 @@ const ROCExplorer = () => {
             <div className="lg:col-span-2 p-6 bg-white flex flex-col relative h-[500px]">
                 <div className="flex justify-between items-center mb-4">
                     <h3 className="font-bold text-slate-800">{domain === 'laplace' ? "S-Plane (Continuous)" : "Z-Plane (Discrete)"}</h3>
-                    <div className="flex gap-2 items-center">
+                    <div className="flex gap-4 items-center">
+                        {/* Range Slider for 3D */}
+                        {viewMode === '3d' && (
+                            <div className="flex items-center gap-2 bg-slate-50 px-3 py-1 rounded-lg border border-slate-200">
+                                <label className="text-xs font-semibold text-slate-500">Range: {plotRange}</label>
+                                <input
+                                    type="range"
+                                    min="2"
+                                    max="50"
+                                    step="1"
+                                    value={plotRange}
+                                    onChange={(e) => setPlotRange(parseFloat(e.target.value))}
+                                    className="w-24 accent-indigo-600 cursor-pointer"
+                                />
+                            </div>
+                        )}
+
                         <div className="flex bg-slate-100 p-1 rounded-lg">
                             <button
                                 onClick={() => setViewMode('2d')}
@@ -595,8 +613,8 @@ const ROCExplorer = () => {
                                     autosize: true,
                                     margin: { l: 0, r: 0, b: 0, t: 0 },
                                     scene: {
-                                        xaxis: { title: domain === 'laplace' ? 'σ (Sigma)' : 'r (Magnitude)' },
-                                        yaxis: { title: 'jω (Freq)' },
+                                        xaxis: { title: domain === 'laplace' ? 'σ (Sigma)' : 'r (Magnitude)', range: domain === 'laplace' ? [-plotRange, plotRange] : [0, plotRange] },
+                                        yaxis: { title: 'jω (Freq)', range: domain === 'laplace' ? [-plotRange, plotRange] : [-Math.PI, Math.PI] },
                                         zaxis: { title: domain === 'laplace' ? '|X(s)|' : '|X(z)|' },
                                         aspectratio: { x: 1, y: 1, z: 0.7 }
                                     },
@@ -615,7 +633,7 @@ const ROCExplorer = () => {
                             />
                         )
                     )
-                    )}
+                    }
                 </div>
             </div>
 
