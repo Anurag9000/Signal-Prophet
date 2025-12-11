@@ -168,11 +168,11 @@ def compute_inverse_fourier(expr_str: str, domain: str = 'continuous'):
         # Format for display - use proper notation based on domain
         if domain == 'discrete':
             # For discrete: Heaviside(n) -> u[n], keep ** for powers
-            res_str = str(f).replace('Heaviside(n)', 'Heaviside[n]').replace('**', '^')
+            res_str = str(f).replace('Heaviside(n)', 'Heaviside[n]').replace('**', '^').replace('I', 'j')
             res_str = res_str.replace('Heaviside', 'u').replace('DiracDelta', 'd')
         else:
             # For continuous: Heaviside(t) -> u(t)
-            res_str = str(f).replace('**', '^').replace('Heaviside', 'u').replace('DiracDelta', 'd')
+            res_str = str(f).replace('**', '^').replace('Heaviside', 'u').replace('DiracDelta', 'd').replace('I', 'j')
         
         print(f"[compute_inverse_fourier] Result: {res_str}")
         
@@ -341,7 +341,7 @@ def compute_laplace(expr_str: str):
     # laplace_transform returns (F, a, cond)
     try:
         F, a, cond = laplace_transform(expr, t, s, noconds=False)
-        return str(F).replace('**', '^') # simplified processing
+        return str(F).replace('**', '^').replace('I', 'j') # simplified processing
     except Exception as e:
         return f"Could not compute Laplace Transform: {str(e)}"
 
@@ -351,7 +351,7 @@ def compute_fourier(expr_str: str):
         # SymPy fourier_transform definition might differ from engineering standard (2pi factors)
         # Using standard variable 'w' (omega)
         F = fourier_transform(expr, t, w)
-        return str(F).replace('**', '^')
+        return str(F).replace('**', '^').replace('I', 'j')
     except Exception as e:
         return f"Could not compute Fourier Transform: {str(e)}"
 
@@ -368,7 +368,7 @@ def compute_inverse_laplace(expr_str: str):
         
         # inverse_laplace_transform(F, s, t)
         f = inverse_laplace_transform(expr, s, t)
-        return str(f).replace('**', '^').replace('Heaviside', 'u').replace('DiracDelta', 'd')
+        return str(f).replace('**', '^').replace('Heaviside', 'u').replace('DiracDelta', 'd').replace('I', 'j')
     except Exception as e:
         return f"Inverse Laplace Failed: {str(e)}"
 
@@ -727,12 +727,26 @@ def extract_poles_zeros(expr_str: str, variable: str):
         numer, denom = rational_expr.as_numer_denom()
         
         # Find roots
-        # roots() returns dict {root: multiplicity} or fails if not polynomial
-        # solve() is safer for general cases
-        from sympy import solve
+        # Use roots() to get multiplicity for repeated poles/zeros
+        from sympy import roots
         
-        zeros_roots = solve(numer, var_sym)
-        poles_roots = solve(denom, var_sym)
+        # Helper to get roots safely (fallback to solve if roots fails)
+        def get_all_roots(poly_expr, sym):
+            try:
+                # Try roots()
+                r_dict = roots(poly_expr, sym)
+                # Flatten the dict: {root: count} -> [root, root, ...]
+                all_roots = []
+                for r, count in r_dict.items():
+                    all_roots.extend([r] * count)
+                return all_roots
+            except:
+                # Fallback to solve
+                from sympy import solve
+                return solve(poly_expr, sym)
+        
+        zeros_roots = get_all_roots(numer, var_sym)
+        poles_roots = get_all_roots(denom, var_sym)
         
         # Helper to format complex number
         def format_root(r):
@@ -741,6 +755,10 @@ def extract_poles_zeros(expr_str: str, variable: str):
             
         zeros_list = [format_root(z) for z in zeros_roots]
         poles_list = [format_root(p) for p in poles_roots]
+        
+        # Sort for consistency
+        zeros_list.sort(key=lambda x: (x['r'], x['i']))
+        poles_list.sort(key=lambda x: (x['r'], x['i']))
         
         return {"poles": poles_list, "zeros": zeros_list}
         

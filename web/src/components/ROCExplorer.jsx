@@ -25,6 +25,20 @@ const ROCExplorer = () => {
     const [analysis, setAnalysis] = useState({ stable: true, html: "System is stable (no poles)." });
     const [updateKey, setUpdateKey] = useState(0);
 
+    // Update defaults when domain changes
+    useEffect(() => {
+        if (domain === 'laplace') {
+            setTransferFunction('(s+1)/(s^2+2*s+1)');
+            setPoles([{ r: -1, i: 0 }, { r: -1, i: 0 }]);
+            setZeros([{ r: -1, i: 0 }]);
+        } else {
+            setTransferFunction('(z+1)/(z^2+2*z+1)');
+            setPoles([{ r: -1, i: 0 }, { r: -1, i: 0 }]);
+            setZeros([{ r: -1, i: 0 }]);
+        }
+        setUpdateKey(prev => prev + 1);
+    }, [domain]);
+
     const [viewMode, setViewMode] = useState('2d'); // '2d' | '3d'
     const [surfaceData, setSurfaceData] = useState(null);
     const [loading3d, setLoading3d] = useState(false);
@@ -35,6 +49,7 @@ const ROCExplorer = () => {
     const [transferFunction, setTransferFunction] = useState('');
     const [tfLoading, setTfLoading] = useState(false);
 
+    // Handle transfer function parsing
     // Handle transfer function parsing
     const handleParseTF = async () => {
         if (!transferFunction.trim()) return;
@@ -62,6 +77,19 @@ const ROCExplorer = () => {
             setTfLoading(false);
         }
     };
+
+    // Auto-scale plot range based on poles/zeros
+    useEffect(() => {
+        const allPoints = [...poles, ...zeros];
+        if (allPoints.length === 0) return;
+
+        const maxMag = Math.max(...allPoints.map(p => Math.sqrt(p.r ** 2 + p.i ** 2)));
+        if (maxMag > 8) { // Only auto-expand if points are outside typical range
+            const newRange = Math.ceil(maxMag * 1.5); // Add 50% padding
+            const clampedRange = Math.min(newRange, 500); // Cap at 500
+            setPlotRange(clampedRange);
+        }
+    }, [poles, zeros]);
 
     // --- Analysis Logic ---
     useEffect(() => {
@@ -554,7 +582,7 @@ const ROCExplorer = () => {
                                 <input
                                     type="range"
                                     min="2"
-                                    max="50"
+                                    max="200"
                                     step="1"
                                     value={plotRange}
                                     onChange={(e) => setPlotRange(parseFloat(e.target.value))}
@@ -613,9 +641,9 @@ const ROCExplorer = () => {
                                     autosize: true,
                                     margin: { l: 0, r: 0, b: 0, t: 0 },
                                     scene: {
-                                        xaxis: { title: domain === 'laplace' ? 'σ (Sigma)' : 'r (Magnitude)', range: domain === 'laplace' ? [-plotRange, plotRange] : [0, plotRange] },
-                                        yaxis: { title: 'jω (Freq)', range: domain === 'laplace' ? [-plotRange, plotRange] : [-Math.PI, Math.PI] },
-                                        zaxis: { title: domain === 'laplace' ? '|X(s)|' : '|X(z)|' },
+                                        xaxis: { title: { text: domain === 'laplace' ? 'σ' : 'r' }, range: domain === 'laplace' ? [-plotRange, plotRange] : [0, plotRange] },
+                                        yaxis: { title: { text: domain === 'laplace' ? 'jω' : 'e^jω' }, range: domain === 'laplace' ? [-plotRange, plotRange] : [-Math.PI, Math.PI] },
+                                        zaxis: { title: { text: domain === 'laplace' ? '|X(s)|' : '|X(z)|' } },
                                         aspectratio: { x: 1, y: 1, z: 0.7 }
                                     },
                                     annotations: (poles.length === 0 && zeros.length === 0) ? [{

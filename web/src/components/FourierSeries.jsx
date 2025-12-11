@@ -121,7 +121,7 @@ const FourierSeries = () => {
                                     xLabel="k (Harmonic)"
                                     yLabel="|ak|"
                                     plotType="stem"
-                                    color="#6366f1"
+                                    color="#2cbbd1c3"
                                 />
                             </div>
 

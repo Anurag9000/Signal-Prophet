@@ -4,29 +4,16 @@ import numpy as np
 def calculate_roc_surface(poles, zeros, gain, domain, roc_type, points=50, plot_range=10.0):
     """
     Generates X, Y, Z data for 3D surface plot of |H(s)| or |H(z)|.
-    
-    Args:
-        poles (list of complex): System poles.
-        zeros (list of complex): System zeros.
-        gain (float): System gain.
-        domain (str): 'laplace' or 'z'.
-        roc_type (str): 'causal' or 'anticausal'.
-        points (int): Grid resolution.
-        plot_range (float): Max range for the plot (auto-scaled if not provided/defaulted, but we'll use input).
-        
-    Returns:
-        dict: {x: list, y: list, z: list} (lists of lists for Plotly)
     """
+    # Dynamic resolution based on range for smoothness
+    # Base points = 50. For larger ranges, increase density.
+    # Cap at 200 to prevent performance issues.
+    adaptive_points = int(max(50, min(plot_range * 2, 200))) 
+    points = adaptive_points
+    
     # Define Grid
     if domain == 'laplace':
         # s = sigma + j*omega
-        # Use plot_range to determine extent
-        
-        # We can still ensure it covers poles if range is too small, but user wants control.
-        # Let's strictly respect plot_range if it seems reasonable, or maybe add it to max pole.
-        # User request: "entire plane where there are values" -> likely wants to Zoom Out.
-        # So we just use plot_range as the +/- limit.
-        
         max_r = plot_range
         max_i = plot_range
         
@@ -38,9 +25,6 @@ def calculate_roc_surface(poles, zeros, gain, domain, roc_type, points=50, plot_
     else: # z-transform
         # z = r * e^(j*omega)
         max_r = plot_range
-        # For Z-plane, we usually plot unit circle area. Range 10 is huge for Z but fine if requested.
-        # Z-transform is typically within unit circle or slightly outside. 
-        # But for stability analysis, poles can be anywhere.
         
         r_vals = np.linspace(0, max_r, points) # r
         w_vals = np.linspace(-np.pi, np.pi, points) # omega
@@ -61,52 +45,45 @@ def calculate_roc_surface(poles, zeros, gain, domain, roc_type, points=50, plot_
     H_complex = gain * numerator / (denominator + epsilon)
     H_mag = np.abs(H_complex)
     
-    # Cap infinity for visualization
-    MAX_HEIGHT = 10.0
-    H_mag = np.minimum(H_mag, MAX_HEIGHT)
+    # Visual Clamping (Prevent infinity spikes)
+    if len(poles) > 0:
+        # For poles, cap at a dynamic robust max to allow seeing the rest of the surface
+        robust_max = np.nanpercentile(H_mag, 90)
+        # Allow at least 10, but clamp to reasonable upper bound
+        clamp_val = max(10.0, min(robust_max * 1.5, 1000.0))
+        H_mag = np.minimum(H_mag, clamp_val)
+    # For zeros only, do NOT clamp (let it grow to show valleys)
     
-    # Apply ROC Masking (NaN for undefined regions)
-    mask = np.ones_like(H_mag, dtype=bool)
+    H_final = H_mag
+
+    # Apply ROC Masking
+    mask = np.ones_like(H_final, dtype=bool)
     
-    if domain == 'laplace':
-        # Causal: Re(s) > max(Re(poles))
-        # Anti-Causal: Re(s) < min(Re(poles))
-        real_parts = [p.real for p in poles]
-        
-        if not real_parts:
-            # No poles, ROC is entire plane
-            pass 
-        elif roc_type == 'causal':
-            limit = max(real_parts)
-            mask = X > limit 
-        elif roc_type == 'anticausal':
-            limit = min(real_parts)
-            mask = X < limit
+    if roc_type == 'causal':
+        # ROC is outside the outermost pole
+        if domain == 'laplace':
+            limit = max([p.real for p in poles]) if poles else -np.inf
+            # Re(s) > limit
+            mask = np.real(S) > limit
+        else:
+            limit = max([abs(p) for p in poles]) if poles else 0
+            # |z| > limit
+            mask = np.abs(S) > limit
             
-    else: # z-transform
-        # Causal: |z| > max(|poles|)
-        # Anti-Causal: |z| < min(|poles|)
-        magnitudes = [abs(p) for p in poles]
-        
-        # Calculate |z| mesh for comparison
-        # Since X is 'r', we just compare X
-        Z_abs = X 
-        
-        if not magnitudes:
-            pass
-        elif roc_type == 'causal':
-            limit = max(magnitudes)
-            mask = Z_abs > limit
-        elif roc_type == 'anticausal':
-            limit = min(magnitudes)
-            mask = Z_abs < limit
+    elif roc_type == 'anticausal':
+        # ROC is inside the innermost pole
+        if domain == 'laplace':
+            limit = min([p.real for p in poles]) if poles else np.inf
+            mask = np.real(S) < limit
+        else:
+            limit = min([abs(p) for p in poles]) if poles else np.inf
+            mask = np.abs(S) < limit
 
     # Apply mask (set invalid to None/NaN)
-    # Numpy use nan
-    H_mag_masked = np.where(mask, H_mag, np.nan)
+    H_final_masked = np.where(mask, H_final, np.nan)
 
     # Convert to lists for JSON serialization
-    z_list = H_mag_masked.tolist()
+    z_list = H_final_masked.tolist()
     # Replace nan with None for valid JSON
     z_list_clean = [[(val if not np.isnan(val) else None) for val in row] for row in z_list]
 
