@@ -10,6 +10,8 @@ import {
 import { Scatter } from 'react-chartjs-2';
 import clsx from 'clsx';
 
+import Plot from 'react-plotly.js';
+
 ChartJS.register(LinearScale, PointElement, LineElement, Tooltip, Legend);
 
 const ROCExplorer = () => {
@@ -22,6 +24,11 @@ const ROCExplorer = () => {
     const [newZero, setNewZero] = useState({ r: 0, i: 0 });
     const [analysis, setAnalysis] = useState({ stable: true, html: "System is stable (no poles)." });
     const [updateKey, setUpdateKey] = useState(0);
+
+    // 3D Visualization State
+    const [viewMode, setViewMode] = useState('2d'); // '2d' | '3d'
+    const [surfaceData, setSurfaceData] = useState(null);
+    const [loading3d, setLoading3d] = useState(false);
 
     // Transfer function input
     const [transferFunction, setTransferFunction] = useState('');
@@ -140,6 +147,34 @@ const ROCExplorer = () => {
         }
         setAnalysis({ stable: isStable, html, valid: isValid });
     }, [poles, zeros, domain, causality, stability, updateKey]);
+
+    // Fetch 3D Data when needed
+    useEffect(() => {
+        if (viewMode === '3d') {
+            const fetchSurface = async () => {
+                setLoading3d(true);
+                try {
+                    const res = await fetch('http://localhost:8000/roc/surface', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            poles,
+                            zeros,
+                            gain: 1.0,
+                            domain,
+                            roc_type: causality
+                        })
+                    });
+                    const data = await res.json();
+                    setSurfaceData(data);
+                } catch (e) {
+                    console.error("Failed to load 3D surface", e);
+                }
+                setLoading3d(false);
+            };
+            fetchSurface();
+        }
+    }, [viewMode, poles, zeros, domain, causality]);
 
     // --- Chart Plugins ---
     const rocPlugin = {
@@ -502,25 +537,76 @@ const ROCExplorer = () => {
             <div className="lg:col-span-2 p-6 bg-white flex flex-col relative h-[500px]">
                 <div className="flex justify-between items-center mb-4">
                     <h3 className="font-bold text-slate-800">{domain === 'laplace' ? "S-Plane (Continuous)" : "Z-Plane (Discrete)"}</h3>
-                    <span className={clsx("px-2 py-1 rounded-full text-xs font-bold border", analysis.stable ? "bg-green-100 text-green-700 border-green-200" : "bg-red-100 text-red-700 border-red-200")}>
-                        {analysis.stable ? "STABLE" : "UNSTABLE"}
-                    </span>
+                    <div className="flex gap-2 items-center">
+                        <div className="flex bg-slate-100 p-1 rounded-lg">
+                            <button
+                                onClick={() => setViewMode('2d')}
+                                className={clsx("px-3 py-1 text-xs font-bold rounded-md transition", viewMode === '2d' ? "bg-white text-indigo-600 shadow-sm" : "text-slate-500")}
+                            >2D ROC</button>
+                            <button
+                                onClick={() => setViewMode('3d')}
+                                className={clsx("px-3 py-1 text-xs font-bold rounded-md transition", viewMode === '3d' ? "bg-white text-indigo-600 shadow-sm" : "text-slate-500")}
+                            >3D Surface</button>
+                        </div>
+                        {viewMode === '2d' && (
+                            <span className={clsx("px-2 py-1 rounded-full text-xs font-bold border", analysis.stable ? "bg-green-100 text-green-700 border-green-200" : "bg-red-100 text-red-700 border-red-200")}>
+                                {analysis.stable ? "STABLE" : "UNSTABLE"}
+                            </span>
+                        )}
+                    </div>
                 </div>
 
                 <div className="flex-1 relative w-full h-full">
-                    <Scatter key={updateKey} data={data} options={options} plugins={[rocPlugin, axesPlugin]} />
-                </div>
-
-                <div className={`mt-4 p-4 border rounded-lg ${analysis.valid === false ? 'bg-red-50 border-red-300' : 'bg-slate-50 border-slate-100'}`}>
-                    <p className={`text-sm font-medium ${analysis.valid === false ? 'text-red-900' : 'text-slate-900'}`}>
-                        {analysis.valid === false ? '⚠️ Invalid Configuration' : 'Analysis'}
-                    </p>
-                    <p className={`text-sm ${analysis.valid === false ? 'text-red-700 font-medium' : 'text-slate-600'}`}>
-                        {analysis.html}
-                    </p>
+                    {viewMode === '2d' ? (
+                        <Scatter key={updateKey} data={data} options={options} plugins={[rocPlugin, axesPlugin]} />
+                    ) : (
+                        loading3d ? (
+                            <div className="absolute inset-0 flex items-center justify-center bg-white/80 z-10">
+                                <span className="animate-spin text-2xl">🌀</span>
+                            </div>
+                        ) : (
+                            surfaceData && (
+                                <Plot
+                                    data={[{
+                                        type: 'surface',
+                                        x: surfaceData.x,
+                                        y: surfaceData.y,
+                                        z: surfaceData.z,
+                                        colorscale: 'Viridis',
+                                        showscale: false,
+                                        contours: {
+                                            z: { show: true, usecolormap: true, highlightcolor: "#42f462", project: { z: true } }
+                                        }
+                                    }]}
+                                    layout={{
+                                        autosize: true,
+                                        margin: { l: 0, r: 0, b: 0, t: 0 },
+                                        scene: {
+                                            xaxis: { title: domain === 'laplace' ? 'σ (Sigma)' : 'r (Magnitude)' },
+                                            yaxis: { title: domain === 'laplace' ? 'jω (Freq)' : '∠ (Angle)' },
+                                            zaxis: { title: '|X|' },
+                                            aspectratio: { x: 1, y: 1, z: 0.7 }
+                                        }
+                                    }}
+                                    useResizeHandler={true}
+                                    style={{ width: "100%", height: "100%" }}
+                                />
+                            )
+                        )
+                    )}
                 </div>
             </div>
+
+            <div className={`mt-4 p-4 border rounded-lg ${analysis.valid === false ? 'bg-red-50 border-red-300' : 'bg-slate-50 border-slate-100'}`}>
+                <p className={`text-sm font-medium ${analysis.valid === false ? 'text-red-900' : 'text-slate-900'}`}>
+                    {analysis.valid === false ? '⚠️ Invalid Configuration' : 'Analysis'}
+                </p>
+                <p className={`text-sm ${analysis.valid === false ? 'text-red-700 font-medium' : 'text-slate-600'}`}>
+                    {analysis.html}
+                </p>
+            </div>
         </div>
+
     );
 };
 

@@ -67,7 +67,7 @@ function App() {
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
                   <span className="relative inline-flex rounded-full h-3 w-3 bg-indigo-500"></span>
                 </span>
-                v2.0 Now with Fourier Engine
+                Now with Fourier Engine
               </div>
               <h1 className="text-6xl md:text-7xl font-extrabold text-slate-900 tracking-tight leading-tight">
                 Master <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-violet-500">Signals</span> & <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-cyan-500">Systems</span>

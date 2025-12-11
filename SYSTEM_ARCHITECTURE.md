@@ -1,6 +1,6 @@
 # SignalProphet - Complete System Architecture
 
-**Version**: 2.0  
+**Version**: Current
 **Last Updated**: 2025-12-11  
 
 ---
@@ -36,7 +36,7 @@ The API Gateway. Routes requests to specific core modules.
 -   `generate_plot_data`: Evaluates expressions for plotting.
 -   Handles Transforms (Laplace, Fourier, Z).
 
-#### 3. `api/core/system_analyzer.py` (New in v2.0)
+#### 3. `api/core/system_analyzer.py`
 -   `analyze_system(equation)`:
     -   Parses `y(t)` vs `x(t)` relationship.
     -   Checks Linearity (Superposition principle).
@@ -44,7 +44,7 @@ The API Gateway. Routes requests to specific core modules.
     -   Checks Causality (Dependence on future inputs).
     -   **BIBO Stability**: Calculates Impulse Response $h(t)$ and integrates $|h(t)|$.
 
-#### 4. `api/core/fourier.py` (New in v2.0)
+#### 4. `api/core/fourier.py`
 -   `calculate_ctfs(x, T)`: Symbolic integration for $a_k$.
 -   `calculate_dtfs(x, N)`: Discrete summation for $a_k$.
 

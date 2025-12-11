@@ -79,8 +79,7 @@ D:\SnS_App/
 │   └── main.py             # FastAPI Routes
 ├── web/                    # React Frontend
 │   ├── src/
-│   │   ├── components/     # UI Tools (SystemAnalyzer, FourierSeries, etc.)
-│   │   └── App.jsx         # Main Logic & Routing
+│   │   ├── components/     # UI    -   System Analyzer, Fourier Series, Fourier Transform, ROC Explorer, Convolution Lab.jsx         # Main Logic & Routing
 └── README.md
 ```
 

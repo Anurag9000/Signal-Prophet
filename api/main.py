@@ -2,7 +2,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional
-from api.core import symbolic, system_analyzer, fourier
+from api.core import symbolic, system_analyzer, fourier, roc_3d
 import uvicorn
 import os
 
@@ -47,6 +47,13 @@ class ConvolutionRequest(BaseModel):
     x_expr: str
     h_expr: str
     domain: str = 'continuous'
+
+class ROC3DRequest(BaseModel):
+    poles: list[dict] # [{r, i}, ...]
+    zeros: list[dict] # [{r, i}, ...]
+    gain: float = 1.0
+    domain: str # 'laplace' | 'z'
+    roc_type: str # 'causal' | 'anticausal'
 
 @app.get("/")
 def read_root():
@@ -370,3 +377,16 @@ def fourier_synthesize(req: FourierSynthesisRequest):
 
 if __name__ == "__main__":
     uvicorn.run("api.main:app", host="0.0.0.0", port=8000, reload=True)
+@app.post("/roc/surface")
+def get_roc_surface(req: ROC3DRequest):
+    try:
+        # Convert dict objects to complex numbers
+        poles_c = [complex(p['r'], p['i']) for p in req.poles]
+        zeros_c = [complex(z['r'], z['i']) for z in req.zeros]
+        
+        data = roc_3d.calculate_roc_surface(
+            poles_c, zeros_c, req.gain, req.domain, req.roc_type
+        )
+        return data
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
