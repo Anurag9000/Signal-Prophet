@@ -1,0 +1,20 @@
+@import "tailwindcss";
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Merriweather:ital,wght@0,300;0,400;0,700;1,400&family=Fira+Code&display=swap');
+
+@theme {
+  --font-sans: 'Inter', system-ui, sans-serif;
+  --font-serif: 'Merriweather', serif;
+  --font-mono: 'Fira Code', monospace;
+
+  --color-academic-50: #f8f9fa;
+  --color-academic-100: #e9ecef;
+  --color-academic-800: #343a40;
+  --color-academic-900: #212529;
+}
+
+@layer base {
+  body {
+    @apply font-sans bg-slate-50 text-slate-900;
+  }
+}
