@@ -583,8 +583,8 @@ const ROCExplorer = () => {
                                         margin: { l: 0, r: 0, b: 0, t: 0 },
                                         scene: {
                                             xaxis: { title: domain === 'laplace' ? 'σ (Sigma)' : 'r (Magnitude)' },
-                                            yaxis: { title: domain === 'laplace' ? 'jω (Freq)' : '∠ (Angle)' },
-                                            zaxis: { title: '|X|' },
+                                            yaxis: { title: 'jω (Freq)' },
+                                            zaxis: { title: domain === 'laplace' ? '|X(s)|' : '|X(z)|' },
                                             aspectratio: { x: 1, y: 1, z: 0.7 }
                                         }
                                     }}

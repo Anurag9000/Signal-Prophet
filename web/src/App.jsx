@@ -62,13 +62,7 @@ function App() {
           <div className="max-w-7xl mx-auto px-6 py-12">
             {/* Hero */}
             <div className="text-center space-y-8 py-16 mb-12">
-              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-indigo-50 border border-indigo-100 text-indigo-600 font-bold text-sm mb-4">
-                <span className="relative flex h-3 w-3">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-3 w-3 bg-indigo-500"></span>
-                </span>
-                Now with Fourier Engine
-              </div>
+
               <h1 className="text-6xl md:text-7xl font-extrabold text-slate-900 tracking-tight leading-tight">
                 Master <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-violet-500">Signals</span> & <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-cyan-500">Systems</span>
               </h1>
@@ -136,9 +130,9 @@ function App() {
                     </li>
                     <li>
                       <a href="https://www.youtube.com/watch?v=KJnAy6hzetw&list=PL41692B571DD0AF9B" target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:underline font-medium">
-                        NPTEL Series
+                        MIT 6.003: Signals and Systems
                       </a>
-                      <p className="text-slate-500 mt-1">Comprehensive lecture series on Signals & Systems</p>
+                      <p className="text-slate-500 mt-1">Prof. Dennis Freeman (Conceptual Focus)</p>
                     </li>
                   </ul>
                 </div>
