@@ -163,63 +163,65 @@ function App() {
                 </div>
               </div>
             </div>
+          </div>
+        )}
 
-            {activeTab === 'system' && <SystemAnalyzer />}
+        {activeTab === 'system' && <SystemAnalyzer />}
 
-            {activeTab === 'roc' && (
-              <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                <div className="text-center max-w-2xl mx-auto pt-8">
-                  <h1 className="text-3xl font-bold text-slate-900 mb-2">ROC Explorer</h1>
-                  <p className="text-slate-600">Laplace & Z-Transform Analysis</p>
-                </div>
-                <ROCExplorer />
-              </div>
-            )}
+        {activeTab === 'roc' && (
+          <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="text-center max-w-2xl mx-auto pt-8">
+              <h1 className="text-3xl font-bold text-slate-900 mb-2">ROC Explorer</h1>
+              <p className="text-slate-600">Laplace & Z-Transform Analysis</p>
+            </div>
+            <ROCExplorer />
+          </div>
+        )}
 
-            {activeTab === 'conv' && (
-              <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                <div className="text-center max-w-2xl mx-auto pt-8">
-                  <h1 className="text-3xl font-bold text-slate-900 mb-2">Convolution Lab</h1>
-                  <p className="text-slate-600">Visualizing the Convolution Integral/Sum</p>
-                </div>
-                <ConvolutionLab />
-              </div>
-            )}
+        {activeTab === 'conv' && (
+          <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="text-center max-w-2xl mx-auto pt-8">
+              <h1 className="text-3xl font-bold text-slate-900 mb-2">Convolution Lab</h1>
+              <p className="text-slate-600">Visualizing the Convolution Integral/Sum</p>
+            </div>
+            <ConvolutionLab />
+          </div>
+        )}
 
-            {activeTab === 'series' && <FourierSeries />}
+        {activeTab === 'series' && <FourierSeries />}
 
-            {activeTab === 'freq' && (
-              <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                <div className="text-center max-w-2xl mx-auto pt-8">
-                  <h1 className="text-3xl font-bold text-slate-900 mb-2">Fourier Transform Lab</h1>
-                  <p className="text-slate-600">Continuous & Discrete Time Fourier Transforms</p>
-                </div>
-                <FrequencyLab />
-              </div>
-            )}
+        {activeTab === 'freq' && (
+          <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="text-center max-w-2xl mx-auto pt-8">
+              <h1 className="text-3xl font-bold text-slate-900 mb-2">Fourier Transform Lab</h1>
+              <p className="text-slate-600">Continuous & Discrete Time Fourier Transforms</p>
+            </div>
+            <FrequencyLab />
+          </div>
+        )}
 
-          </main>
+      </main>
 
       {/* Footer */}
-        <footer className="bg-slate-50 border-t border-slate-200 mt-auto">
-          <div className="max-w-7xl mx-auto px-6 py-12">
-            <div className="grid md:grid-cols-2 gap-8 items-center">
-              <div>
-                <div className="flex items-center space-x-2 mb-4">
-                  <div className="w-8 h-8 bg-slate-900 rounded-lg flex items-center justify-center text-white font-bold text-lg">S</div>
-                  <span className="font-bold text-slate-900">SignalProphet</span>
-                </div>
-                <p className="text-slate-500 text-sm max-w-sm">
-                  Built for students and engineers to visualize the mathematics of signal processing.
-                </p>
+      <footer className="bg-slate-50 border-t border-slate-200 mt-auto">
+        <div className="max-w-7xl mx-auto px-6 py-12">
+          <div className="grid md:grid-cols-2 gap-8 items-center">
+            <div>
+              <div className="flex items-center space-x-2 mb-4">
+                <div className="w-8 h-8 bg-slate-900 rounded-lg flex items-center justify-center text-white font-bold text-lg">S</div>
+                <span className="font-bold text-slate-900">SignalProphet</span>
               </div>
-              <div className="text-right text-sm text-slate-400">
-                <p>© 2025 SignalProphet Inc.</p>
-                <p>Powered by Python (SymPy) & React</p>
-              </div>
+              <p className="text-slate-500 text-sm max-w-sm">
+                Built for students and engineers to visualize the mathematics of signal processing.
+              </p>
+            </div>
+            <div className="text-right text-sm text-slate-400">
+              <p>© 2025 SignalProphet Inc.</p>
+              <p>Powered by Python (SymPy) & React</p>
             </div>
           </div>
-        </footer>
+        </div>
+      </footer>
     </div>
   );
 }
