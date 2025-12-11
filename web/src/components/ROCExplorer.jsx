@@ -586,7 +586,16 @@ const ROCExplorer = () => {
                                             yaxis: { title: 'jω (Freq)' },
                                             zaxis: { title: domain === 'laplace' ? '|X(s)|' : '|X(z)|' },
                                             aspectratio: { x: 1, y: 1, z: 0.7 }
-                                        }
+                                        },
+                                        annotations: (poles.length === 0 && zeros.length === 0) ? [{
+                                            text: "No Poles/Zeros defined.<br>Plotting flat response.",
+                                            x: 0, y: 0, z: 5,
+                                            showarrow: false,
+                                            font: { size: 14, color: 'red' },
+                                            bgcolor: 'rgba(255,255,255,0.8)',
+                                            bordercolor: 'red',
+                                            borderwidth: 1
+                                        }] : []
                                     }}
                                     useResizeHandler={true}
                                     style={{ width: "100%", height: "100%" }}
