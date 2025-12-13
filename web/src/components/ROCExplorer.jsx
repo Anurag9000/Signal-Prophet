@@ -11,6 +11,7 @@ import { Scatter } from 'react-chartjs-2';
 import clsx from 'clsx';
 
 import Plot from 'react-plotly.js';
+import { API_URL } from '../config';
 
 ChartJS.register(LinearScale, PointElement, LineElement, Tooltip, Legend);
 
@@ -57,7 +58,7 @@ const ROCExplorer = () => {
         setTfLoading(true);
         try {
             const variable = domain === 'laplace' ? 's' : 'z';
-            const res = await fetch('http://localhost:8000/parse_transfer_function', {
+            const res = await fetch(`${API_URL}/parse_transfer_function`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ expression: transferFunction, variable })
@@ -184,7 +185,7 @@ const ROCExplorer = () => {
                 setLoading3d(true);
                 setError3d(null);
                 try {
-                    const res = await fetch('http://localhost:8000/roc/surface', {
+                    const res = await fetch(`${API_URL}/roc/surface`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({

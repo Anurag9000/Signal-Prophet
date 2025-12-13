@@ -3,8 +3,7 @@ import axios from 'axios';
 import 'katex/dist/katex.min.css';
 import { Play, Loader2 } from 'lucide-react';
 import clsx from 'clsx';
-
-const API_URL = "http://localhost:8000";
+import { API_URL } from '../config';
 
 const SignalEditor = ({ onPlotData, onTransformData, onSpectrumData, onSeriesData }) => {
     const [expression, setExpression] = useState("u(t) - u(t-2)");

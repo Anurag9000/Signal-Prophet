@@ -3,6 +3,7 @@ import axios from 'axios';
 import { BlockMath } from 'react-katex';
 import { ArrowRight, Waves, Activity } from 'lucide-react';
 import Visualizer from './Visualizer';
+import { API_URL } from '../config';
 
 const FrequencyLab = () => {
     const [domain, setDomain] = useState('continuous'); // 'continuous' | 'discrete'
@@ -25,7 +26,7 @@ const FrequencyLab = () => {
             if (direction === 'forward') {
                 // Time Domain Input -> Frequency Domain Output
                 // 1. Plot input time signal
-                const timePlotRes = await axios.post('http://localhost:8000/plot', {
+                const timePlotRes = await axios.post(`${API_URL}/plot`, {
                     expression,
                     t_min: -5,
                     t_max: 5,
@@ -34,14 +35,14 @@ const FrequencyLab = () => {
                 setInputPlot(timePlotRes.data);
 
                 // 2. Compute symbolic transform
-                const transformRes = await axios.post('http://localhost:8000/transform', {
+                const transformRes = await axios.post(`${API_URL}/transform`, {
                     expression,
                     type: 'fourier' // Always Fourier for CTFT/DTFT
                 });
                 setSymbolicResult(transformRes.data.latex);
 
                 // 3. Compute frequency spectrum
-                const spectrumRes = await axios.post('http://localhost:8000/spectrum', {
+                const spectrumRes = await axios.post(`${API_URL}/spectrum`, {
                     expression,
                     domain,
                     w_min: -10,
@@ -57,7 +58,7 @@ const FrequencyLab = () => {
                 // Frequency Domain Input -> Time Domain Output
                 // 1. Plot input frequency response
                 console.log("Calling /inverse with expression:", expression);
-                const freqRes = await axios.post('http://localhost:8000/inverse', {
+                const freqRes = await axios.post(`${API_URL}/inverse`, {
                     expression,
                     type: 'fourier',
                     domain: domain

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Activity, CheckCircle, XCircle, AlertCircle, Info } from 'lucide-react';
 import axios from 'axios';
 import Visualizer from './Visualizer';
+import { API_URL } from '../config';
 
 const SystemAnalyzer = () => {
     const [domain, setDomain] = useState('continuous');
@@ -17,7 +18,7 @@ const SystemAnalyzer = () => {
     const handleAnalyze = async () => {
         setLoading(true);
         try {
-            const res = await axios.post('http://localhost:8000/analyze_system', {
+            const res = await axios.post(`${API_URL}/analyze_system`, {
                 equation: systemEq,
                 input_equation: inputEq,
                 domain: domain

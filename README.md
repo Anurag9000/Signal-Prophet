@@ -6,6 +6,7 @@ Built based on the curriculum of *Signals and Systems* by Oppenheim & Willsky.
 
 ![Status](https://img.shields.io/badge/Status-Active-success)
 ![Stack](https://img.shields.io/badge/Stack-React%20%7C%20FastAPI%20%7C%20SymPy-blue)
+[![Live Demo](https://img.shields.io/badge/demo-online-green.svg)](https://Anurag9000.github.io/Signal-Prophet/)
 
 ## ✨ Features
 
@@ -66,6 +67,32 @@ Built based on the curriculum of *Signals and Systems* by Oppenheim & Willsky.
     npm run dev
     ```
     *Open `http://localhost:5173` in your browser.*
+
+## 🌐 Deployment (Live)
+
+To make the app live, we perform a **Dual Deployment**:
+
+### 1. Backend (Render.com)
+The Python backend cannot run on GitHub Pages. Deploy it to **Render** (Free):
+1.  Fork/Upload this repo to your GitHub.
+2.  Sign up for [Render.com](https://render.com).
+3.  Create a **New Web Service**.
+4.  Connect your repository.
+5.  Render should auto-detect Python. Ensure:
+    -   **Build Command**: `pip install -r api/requirements.txt`
+    -   **Start Command**: `uvicorn api.main:app --host 0.0.0.0 --port $PORT`
+6.  Copy your new **Backend URL** (e.g., `https://signal-prophet.onrender.com`).
+
+### 2. Frontend (GitHub Pages)
+1.  In `web/src/config.js`, update the fallback URL if you want, OR better yet:
+2.  Set the environment variable in your build process (not easy with GH Pages static generation unless hardcoded).
+3.  **Recommended for simple setup**: Edit `web/src/config.js` and change default `http://localhost:8000` to your **Render Backend URL**.
+4.  Run deployment:
+    ```bash
+    cd web
+    npm run deploy
+    ```
+5.  Your site will be live at `https://Anurag9000.github.io/Signal-Prophet/`.
 
 ## 📂 Project Structure
 

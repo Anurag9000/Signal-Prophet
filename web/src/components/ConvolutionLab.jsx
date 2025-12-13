@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import Plot from 'react-plotly.js';
 import { Play, Pause, Loader2, RefreshCw } from 'lucide-react';
+import { API_URL } from '../config';
 
 const ConvolutionLab = () => {
     const [domain, setDomain] = useState('continuous'); // 'continuous' | 'discrete'
@@ -29,7 +30,7 @@ const ConvolutionLab = () => {
         setLoading(true);
         setIsPlaying(false);
         try {
-            const res = await axios.post("http://localhost:8000/convolution", {
+            const res = await axios.post(`${API_URL}/convolution`, {
                 x_expr: xExpr,
                 h_expr: hExpr,
                 domain: domain
@@ -137,7 +138,7 @@ const ConvolutionLab = () => {
                 x: [currentFrame?.t],
                 y: [currentFrame?.current_y],
                 mode: 'markers',
-                marker: { color: '#10b981', size: 10, symbol: 'circle-open', line: { width: 2 } }
+                marker: { color: '#1ee8a5ff', size: 10, symbol: 'circle-open', line: { width: 2 } }
             }
         ],
         layout: {

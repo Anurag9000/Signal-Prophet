@@ -4,6 +4,7 @@ import axios from 'axios';
 import { InlineMath } from 'react-katex';
 import { Waves, Activity } from 'lucide-react';
 import Visualizer from './Visualizer';
+import { API_URL } from '../config';
 
 const FourierSeries = () => {
     const [domain, setDomain] = useState('continuous'); // 'continuous' | 'discrete'
@@ -21,7 +22,7 @@ const FourierSeries = () => {
     const handleAnalyze = async () => {
         setLoading(true);
         try {
-            const res = await axios.post('http://localhost:8000/fourier/analyze', {
+            const res = await axios.post(`${API_URL}/fourier/analyze`, {
                 expression: signalEq,
                 T: parseFloat(period),
                 N: parseInt(numN),
