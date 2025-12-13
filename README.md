@@ -8,6 +8,13 @@ Built based on the curriculum of *Signals and Systems* by Oppenheim & Willsky.
 ![Stack](https://img.shields.io/badge/Stack-React%20%7C%20FastAPI%20%7C%20SymPy-blue)
 [![Live Demo](https://img.shields.io/badge/demo-online-green.svg)](https://Anurag9000.github.io/Signal-Prophet/)
 
+## 🌐 Try It Live
+Click the button below to launch the application immediately in your browser:
+
+### [👉 Launch SignalProphet 👈](https://Anurag9000.github.io/Signal-Prophet/)
+
+---
+
 ## ✨ Features
 
 - **System Analyzer**:
@@ -33,7 +40,11 @@ Built based on the curriculum of *Signals and Systems* by Oppenheim & Willsky.
     - Animated "Fold, Shift, Multiply, Add" visualization.
     - Step-by-step understanding of the convolution integral/sum.
 
-## 🚀 Quick Start
+---
+
+## 🛠️ Run Locally (Development)
+
+If you want to run the code on your own machine for development:
 
 ### Prerequisites
 - Python 3.8+
@@ -43,7 +54,8 @@ Built based on the curriculum of *Signals and Systems* by Oppenheim & Willsky.
 
 1.  **Clone/Open the Repository**
     ```bash
-    cd D:\SnS_App
+    git clone https://github.com/Anurag9000/Signal-Prophet.git
+    cd Signal-Prophet
     ```
 
 2.  **Backend Setup**
@@ -68,36 +80,12 @@ Built based on the curriculum of *Signals and Systems* by Oppenheim & Willsky.
     ```
     *Open `http://localhost:5173` in your browser.*
 
-## 🌐 Deployment (Live)
-
-To make the app live, we perform a **Dual Deployment**:
-
-### 1. Backend (Render.com)
-The Python backend cannot run on GitHub Pages. Deploy it to **Render** (Free):
-1.  Fork/Upload this repo to your GitHub.
-2.  Sign up for [Render.com](https://render.com).
-3.  Create a **New Web Service**.
-4.  Connect your repository.
-5.  Render should auto-detect Python. Ensure:
-    -   **Build Command**: `pip install -r api/requirements.txt`
-    -   **Start Command**: `uvicorn api.main:app --host 0.0.0.0 --port $PORT`
-6.  Copy your new **Backend URL** (e.g., `https://signal-prophet.onrender.com`).
-
-### 2. Frontend (GitHub Pages)
-1.  In `web/src/config.js`, update the fallback URL if you want, OR better yet:
-2.  Set the environment variable in your build process (not easy with GH Pages static generation unless hardcoded).
-3.  **Recommended for simple setup**: Edit `web/src/config.js` and change default `http://localhost:8000` to your **Render Backend URL**.
-4.  Run deployment:
-    ```bash
-    cd web
-    npm run deploy
-    ```
-5.  Your site will be live at `https://Anurag9000.github.io/Signal-Prophet/`.
+---
 
 ## 📂 Project Structure
 
 ```
-D:\SnS_App/
+Signal-Prophet/
 ├── api/                    # Python Analysis Engine
 │   ├── core/               # Symbolic math logic (SymPy)
 │   │   ├── symbolic.py     # General transforms & parsing
