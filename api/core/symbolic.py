@@ -11,7 +11,33 @@ def parse_signal(expr_str: str, domain: str = 'continuous'):
     """
     Parses a user input string into a SymPy expression.
     Handles 'u(t)', 'd(t)' substitutions to SymPy equivalents.
+    Handles |expr| as Abs(expr) for absolute value notation.
     """
+    # Pre-processing: Convert |expr| to Abs(expr)
+    # Handle nested cases by replacing innermost first
+    import re
+    
+    def convert_abs_notation(s):
+        """Convert |expr| to Abs(expr), handling nested cases."""
+        max_iterations = 10  # Prevent infinite loops
+        iteration = 0
+        
+        while '|' in s and iteration < max_iterations:
+            # Find innermost |expr| (no nested | inside)
+            # Pattern: | followed by non-| chars, followed by |
+            match = re.search(r'\|([^|]+)\|', s)
+            if not match:
+                # No valid pair found, break
+                break
+            
+            # Replace with Abs(...)
+            s = s[:match.start()] + f'Abs({match.group(1)})' + s[match.end():]
+            iteration += 1
+        
+        return s
+    
+    expr_str = convert_abs_notation(expr_str)
+    
     # Pre-processing for standard engineering notation
     # Replace u(t) with Heaviside(t)
     # Replace d(t) with DiracDelta(t)

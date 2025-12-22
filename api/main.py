@@ -391,6 +391,29 @@ def fourier_synthesize(req: FourierSynthesisRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+class PeriodDetectionRequest(BaseModel):
+    expression: str
+    domain: str = 'continuous'
+
+@app.post("/fourier/detect-period")
+def detect_period_endpoint(req: PeriodDetectionRequest):
+    """
+    Auto-detect period T (CT) or N (DT) for a given signal.
+    Returns: {period: float|int|null, message: str}
+    """
+    try:
+        from api.core.period_detection import detect_period_ct, detect_period_dt
+        
+        if req.domain == 'continuous':
+            period, message = detect_period_ct(req.expression)
+        else:
+            period, message = detect_period_dt(req.expression)
+        
+        return {"period": period, "message": message}
+    except Exception as e:
+        return {"period": None, "message": f"Error: {str(e)}"}
+
+
 @app.post("/roc/surface")
 def get_roc_surface(req: ROC3DRequest):
     try:

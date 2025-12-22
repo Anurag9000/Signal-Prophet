@@ -38,6 +38,29 @@ const FourierSeries = () => {
         setLoading(false);
     };
 
+    const handleAutoDetectPeriod = async () => {
+        try {
+            const res = await axios.post(`${API_URL}/fourier/detect-period`, {
+                expression: signalEq,
+                domain: domain
+            });
+
+            if (res.data.period !== null) {
+                if (domain === 'continuous') {
+                    setPeriod(res.data.period);
+                } else {
+                    setNumN(res.data.period);
+                }
+                alert(res.data.message);
+            } else {
+                alert(res.data.message || "Could not detect period");
+            }
+        } catch (err) {
+            console.error(err);
+            alert("Period detection failed. See console.");
+        }
+    };
+
     return (
         <div className="p-8 max-w-7xl mx-auto space-y-8">
             {/* Header */}
@@ -83,6 +106,13 @@ const FourierSeries = () => {
                                 onChange={(e) => domain === 'continuous' ? setPeriod(e.target.value) : setNumN(e.target.value)}
                                 className="w-24 px-3 py-2 border border-slate-300 rounded-lg font-mono focus:ring-2 focus:ring-indigo-500 outline-none"
                             />
+                            <button
+                                onClick={handleAutoDetectPeriod}
+                                className="px-3 py-2 bg-green-600 text-white text-xs font-bold rounded-lg hover:bg-green-700 transition"
+                                title="Auto-detect period from signal"
+                            >
+                                Auto-Detect
+                            </button>
                         </div>
                     </div>
 
