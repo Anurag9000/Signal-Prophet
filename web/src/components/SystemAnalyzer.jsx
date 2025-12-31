@@ -129,7 +129,7 @@ const SystemAnalyzer = () => {
                                     value={systemEq}
                                     onChange={(e) => setSystemEq(e.target.value)}
                                     className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-mono text-base focus:ring-2 focus:ring-indigo-500 outline-none transition"
-                                    placeholder={domain === 'continuous' ? 'e.g., 2*x(t) + 3 or t*x(t)' : 'e.g., x[n-1] + 0.5*x[n]'}
+                                    placeholder={domain === 'continuous' ? 'e.g., 2*x(t) + 3 or rect(t)*x(t)' : 'e.g., x[n-1] + 0.5*x[n]'}
                                 />
                             </div>
 
@@ -142,7 +142,7 @@ const SystemAnalyzer = () => {
                                     value={inputEq}
                                     onChange={(e) => setInputEq(e.target.value)}
                                     className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-mono text-base focus:ring-2 focus:ring-indigo-500 outline-none transition"
-                                    placeholder={domain === 'continuous' ? 'e.g., delta(t), u(t), cos(t)' : 'e.g., delta[n], u[n]'}
+                                    placeholder={domain === 'continuous' ? 'e.g., d(t), u(t), sinc(t), rect(t)' : 'e.g., d[n], u[n], (0.5)^n * u[n]'}
                                 />
                             </div>
                         </div>

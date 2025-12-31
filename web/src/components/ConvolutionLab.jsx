@@ -179,6 +179,7 @@ const ConvolutionLab = () => {
                                 type="text"
                                 value={xExpr}
                                 onChange={e => setXExpr(e.target.value)}
+                                placeholder={domain === 'continuous' ? 'e.g., rect(t), u(t)-u(t-1)' : 'e.g., u[n]-u[n-5]'}
                                 className="w-full px-3 py-2 border rounded-lg font-mono text-sm focus:ring-2 focus:ring-blue-500 outline-none"
                             />
                         </div>
@@ -188,6 +189,7 @@ const ConvolutionLab = () => {
                                 type="text"
                                 value={hExpr}
                                 onChange={e => setHExpr(e.target.value)}
+                                placeholder={domain === 'continuous' ? 'e.g., exp(-t)*u(t), sinc(t)' : 'e.g., (0.8)^n * u[n]'}
                                 className="w-full px-3 py-2 border rounded-lg font-mono text-sm focus:ring-2 focus:ring-blue-500 outline-none"
                             />
                         </div>

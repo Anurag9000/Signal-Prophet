@@ -185,7 +185,10 @@ const FrequencyLab = () => {
                             value={expression}
                             onChange={(e) => setExpression(e.target.value)}
                             className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-mono text-base focus:ring-2 focus:ring-indigo-500 outline-none transition"
-                            placeholder={direction === 'forward' ? 'e.g., exp(-t)*u(t)' : 'e.g., 1/(1 + I*w)'}
+                            placeholder={direction === 'forward'
+                                ? (domain === 'continuous' ? 'e.g., rect(t), sinc(t), exp(-t)*u(t)' : 'e.g., (0.8)^n * u[n]')
+                                : (domain === 'continuous' ? 'e.g., 1/(1 + I*w), rect(w)' : 'e.g., 1/(1 - 0.8*exp(-I*w))')
+                            }
                         />
                     </div>
 

@@ -488,7 +488,7 @@ const ROCExplorer = () => {
                             type="text"
                             value={transferFunction}
                             onChange={(e) => setTransferFunction(e.target.value)}
-                            placeholder={domain === 'laplace' ? 'e.g., (s+1)/(s^2+2*s+1)' : 'e.g., (z-0.5)/(z^2-1.5*z+0.5)'}
+                            placeholder={domain === 'laplace' ? 'e.g., (s+1)/(s^2+2*s+5) or 1/(s+1)' : 'e.g., (z-0.5)/(z^2-z+1)'}
                             className="w-full px-3 py-2 text-sm border border-slate-300 rounded font-mono mb-2"
                         />
                         <button

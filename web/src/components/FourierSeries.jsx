@@ -125,7 +125,7 @@ const FourierSeries = () => {
                                 value={signalEq}
                                 onChange={(e) => setSignalEq(e.target.value)}
                                 className="w-full px-4 py-3 bg-white border border-slate-300 rounded-xl font-mono text-lg focus:ring-2 focus:ring-indigo-500 outline-none"
-                                placeholder={domain === 'continuous' ? "e.g. sign(sin(t))" : "e.g. cos(2*pi*n/10)"}
+                                placeholder={domain === 'continuous' ? "e.g. sign(sin(t)), rect(t/2), cos(t) + 0.5" : "e.g. cos(2*pi*n/10)"}
                             />
                         </div>
                         <button

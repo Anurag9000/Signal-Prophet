@@ -1,11 +1,12 @@
 
 import React, { useState } from 'react';
-import { Layers, Box, Waves, Activity, Zap } from 'lucide-react';
+import { Layers, Box, Waves, Activity, Zap, HelpCircle } from 'lucide-react';
 import ROCExplorer from './components/ROCExplorer';
 import ConvolutionLab from './components/ConvolutionLab';
 import FrequencyLab from './components/FrequencyLab';
 import SystemAnalyzer from './components/SystemAnalyzer';
 import FourierSeries from './components/FourierSeries';
+import MathHelp from './components/MathHelp';
 import 'katex/dist/katex.min.css';
 
 function App() {
@@ -37,6 +38,7 @@ function App() {
                 { id: 'conv', label: 'Convolution', icon: Box },
                 { id: 'series', label: 'Series', icon: Waves },
                 { id: 'freq', label: 'Transform', icon: Zap },
+                { id: 'help', label: 'Help', icon: HelpCircle },
               ].map((tab) => (
                 <button
                   key={tab.id}
@@ -193,6 +195,8 @@ function App() {
             <FrequencyLab />
           </div>
         )}
+
+        {activeTab === 'help' && <MathHelp />}
 
       </main>
 

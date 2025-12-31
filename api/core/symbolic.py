@@ -1,7 +1,8 @@
-from sympy import symbols, Heaviside, DiracDelta, exp, sin, cos, pi, I, oo, sympify, lambdify, integrate, laplace_transform, fourier_transform, inverse_laplace_transform, inverse_fourier_transform, Abs, arg, fourier_series, Integral, Sum
+from sympy import symbols, Heaviside, DiracDelta, exp, sin, cos, tan, pi, I, oo, sympify, lambdify, integrate, laplace_transform, fourier_transform, inverse_laplace_transform, inverse_fourier_transform, Abs, arg, fourier_series, Integral, Sum, sinc, Max, Min, Piecewise, sinh, cosh, tanh, asin, acos, atan, log
 from sympy.parsing.sympy_parser import parse_expr, standard_transformations, implicit_multiplication_application
-from sympy.abc import t, n, s, z, w
+from sympy.abc import t, n, s, z, w, k
 import numpy as np
+import sympy
 
 # Define custom symbols and functions for parsing
 # 'j' is often used in engineering for sqrt(-1)
@@ -77,13 +78,23 @@ def parse_signal(expr_str: str, domain: str = 'continuous'):
 
     # Custom context
     local_dict = {
-        't': t, 'n': n, 's': s, 'z': z, 'w': w,
-        'j': I, 'exp': exp, 'sin': sin, 'cos': cos, 'pi': pi,
+        't': t, 'n': n, 's': s, 'z': z, 'w': w, 'k': k,
+        'j': I, 'exp': exp, 'sin': sin, 'cos': cos, 'tan': tan, 'pi': pi, 'e': sympy.E,
         'Heaviside': Heaviside, 'DiracDelta': DiracDelta,
         'Abs': Abs, 'arg': arg, 'sqrt': sympify('sqrt'), 'sign': sympify('sign'),
         'u': Heaviside, 'd': DiracDelta, # Aliases for direct usage if missed by replace
-        'I': I
+        'I': I, 'sinc': sinc, 'Max': Max, 'Min': Min,
+        'sinh': sinh, 'cosh': cosh, 'tanh': tanh,
+        'asin': asin, 'acos': acos, 'atan': atan,
+        'ln': log, 'log': log
     }
+    
+    # Add pulse definitions
+    # rect(t) = 1 if |t| < 0.5 else 0
+    # tri(t) = max(0, 1 - |t|)
+    # We can inject these as lambda functions or expressions
+    local_dict['rect'] = lambda x: Heaviside(x + 1/2) - Heaviside(x - 1/2)
+    local_dict['tri'] = lambda x: Max(0, 1 - Abs(x))
     
     transformations = (standard_transformations + (implicit_multiplication_application,))
     
@@ -224,19 +235,16 @@ def evaluate_frequency_response(expr_str: str, w_min: float = -10, w_max: float 
     try:
         import re
         
-        # Replace imaginary unit symbols with 1j using word boundaries
-        # This ensures we don't replace 'i' in 'sin' or 'pi'
+        # The \b boundaries ensure we don't match 'i' in 'sin' or 'pi'
         clean_expr = expr_str
         clean_expr = re.sub(r'\bI\b', '1j', clean_expr)
         clean_expr = re.sub(r'\bi\b', '1j', clean_expr) 
         clean_expr = re.sub(r'\bJ\b', '1j', clean_expr)
         clean_expr = re.sub(r'\bj\b', '1j', clean_expr)
         
-        # Also handle I* and i* patterns (multiplication)
-        clean_expr = re.sub(r'I\*', '1j*', clean_expr)
-        clean_expr = re.sub(r'i\*', '1j*', clean_expr)
-        clean_expr = re.sub(r'J\*', '1j*', clean_expr)
-        clean_expr = re.sub(r'j\*', '1j*', clean_expr)
+        # Add support for common multiplication without * like '2j' if needed,
+        # but the current parser usually expects * or implicit multiplication handles it.
+        # Ensure '1j' is not replaced again by checking for it specifically if we add more.
         
         print(f"[evaluate_frequency_response] Original: {expr_str}")
         print(f"[evaluate_frequency_response] Cleaned: {clean_expr}")
@@ -259,7 +267,20 @@ def evaluate_frequency_response(expr_str: str, w_min: float = -10, w_max: float 
                     'sqrt': np.sqrt,
                     'abs': np.abs,
                     'log': np.log,
-                    'e': np.e
+                    'log10': np.log10,
+                    'e': np.e,
+                    'sinc': np.sinc, # Note: np.sinc(x) is sin(pi*x)/(pi*x)
+                    'sinh': np.sinh,
+                    'cosh': np.cosh,
+                    'tanh': np.tanh,
+                    'asin': np.arcsin,
+                    'acos': np.arccos,
+                    'atan': np.arctan,
+                    'sign': np.sign,
+                    'Heaviside': lambda x: np.where(x >= 0, 1.0, 0.0),
+                    'u': lambda x: np.where(x >= 0, 1.0, 0.0),
+                    'rect': lambda x: np.where(np.abs(x) <= 0.5, 1.0, 0.0),
+                    'tri': lambda x: np.maximum(0, 1 - np.abs(x))
                 }
                 
                 # Evaluate the expression
@@ -331,7 +352,18 @@ def generate_plot_data(expr_str: str, t_min: float = -10, t_max: float = 10, num
         tolerance = 0.05 if domain == 'continuous' else 0.1
         return np.where(np.abs(val) < tolerance, 1.0, 0.0)
 
-    modules_dict = [{'VisualDirac': visual_dirac_impl}, 'numpy']
+    modules_dict = [
+        {
+            'VisualDirac': visual_dirac_impl,
+            'Heaviside': lambda x, h0=1.0: np.where(x >= 0, 1.0, 0.0),
+            'Max': np.maximum,
+            'Min': np.minimum,
+            'rect': lambda x: np.where(np.abs(x) <= 0.5, 1.0, 0.0),
+            'tri': lambda x: np.maximum(0, 1 - np.abs(x)),
+            'sinc': np.sinc # numpy sinc is sin(pi*x)/(pi*x)
+        }, 
+        'numpy'
+    ]
 
     if domain == 'continuous':
         # Create lambda function

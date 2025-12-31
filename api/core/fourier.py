@@ -15,8 +15,10 @@ def calculate_ctfs(signal_eq: str, T: float, k_min: int = -5, k_max: int = 5):
         # Parse signal x(t)
         x_expr = parse_signal(signal_eq, 'continuous')
         
-        # Fundamental frequency
-        w0 = 2 * pi / T
+        # Fundamental frequency - recover symbolic pi if T is a multiple
+        from sympy import nsimplify
+        T_sym = nsimplify(T, [pi])
+        w0 = 2 * pi / T_sym
         
         coeffs = []
         

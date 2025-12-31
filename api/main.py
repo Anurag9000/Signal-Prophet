@@ -211,7 +211,7 @@ def analyze_system_endpoint(req: SystemAnalysisRequest):
         if req.input_equation:
             input_str = req.input_equation
         else:
-            input_str = 'delta(t)' if req.domain == 'continuous' else 'delta[n]'
+            input_str = 'd(t)' if req.domain == 'continuous' else 'd[n]'
             
         # Generate Input Plot
         try:
@@ -319,6 +319,13 @@ def analyze_system_endpoint(req: SystemAnalysisRequest):
         output_eq_str = str(output_expr).replace('**', '^').replace('DiracDelta', 'd').replace('Heaviside', 'u')
         if req.domain == 'discrete':
             output_eq_str = output_eq_str.replace('(', '[').replace(')', ']')
+
+        # Safety: Ensure everything in properties is JSON serializable (convert any SymPy types to string)
+        for key in properties:
+            if isinstance(properties[key], dict) and 'explanation' in properties[key]:
+                properties[key]['explanation'] = str(properties[key]['explanation'])
+            elif not isinstance(properties[key], (str, int, float, bool, list, dict, type(None))):
+                properties[key] = str(properties[key])
 
         return {
             "properties": properties, 

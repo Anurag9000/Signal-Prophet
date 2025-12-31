@@ -7,8 +7,8 @@ import re
 from sympy import symbols, sympify, diff, simplify, solve, Abs, DiracDelta, Heaviside, Function, integrate, Sum, oo, Integral
 from sympy.parsing.sympy_parser import parse_expr, standard_transformations, implicit_multiplication_application
 
-t, n, x = symbols('t n x')
-w = symbols('w')
+t, n, x = symbols('t n x', real=True)
+w = symbols('w', real=True)
 
 def analyze_system(equation: str, domain: str = 'continuous'):
     """
@@ -216,14 +216,22 @@ def check_stability_bibo(h_expr, domain: str):
          
     try:
         if domain == 'continuous':
+            # Heuristic: DiracDelta is stable
+            if h_expr.has(DiracDelta) and not h_expr.has(Integral) and not h_expr.has(Heaviside):
+                return {'status': 'yes', 'explanation': 'Stable: Impulse response is a Dirac Delta (finite energy)'}
+
             # Integral |-oo to oo| |h(t)| dt
-            # Simplify first might help
-            abs_h = Abs(h_expr)
+            # Simplify first to assist SymPy
+            abs_h = simplify(Abs(h_expr))
             stability_integral = integrate(abs_h, (t, -oo, oo))
+            
+            # Further simplify the result
+            stability_integral = simplify(stability_integral)
             
             if stability_integral.is_finite:
                  return {'status': 'yes', 'explanation': 'Stable: Integral of |h(t)| is finite (BIBO)'}
-            elif stability_integral == oo:
+            
+            if stability_integral == oo:
                  return {'status': 'no', 'explanation': 'Unstable: Integral of |h(t)| is infinite'}
             else:
                  # Sometimes integration fails or returns condition
