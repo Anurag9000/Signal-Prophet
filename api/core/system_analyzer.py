@@ -7,7 +7,9 @@ from api.core.utils import t, n, s, z, w, k, get_shared_modules_dict, clean_outp
 import re
 import logging
 import traceback
-from sympy import symbols, sympify, diff, simplify, solve, Abs, DiracDelta, Heaviside, Function, integrate, Sum, oo, Integral, KroneckerDelta, Add, sin, cos, exp, log
+import numpy as np
+from sympy import (symbols, sympify, diff, simplify, solve, Abs, DiracDelta, Heaviside, 
+                   Function, integrate, Sum, oo, Integral, KroneckerDelta, Add, sin, cos, exp, log, Poly, factorial)
 from sympy.parsing.sympy_parser import parse_expr, standard_transformations, implicit_multiplication_application
 
 logger = logging.getLogger(__name__)
@@ -47,10 +49,9 @@ def check_linearity(eq: str, domain: str):
     Falls back to regex for complex cases.
     """
     try:
-        # Try symbolic test first
-        from sympy import symbols, Function, simplify
-        
         x_func = Function('x')
+        x_sym = symbols('x') # For cases where x is treated as symbol, not function
+        
         a, b = symbols('a b', real=True, positive=True)
         var = t if domain == 'continuous' else n
         
@@ -64,7 +65,6 @@ def check_linearity(eq: str, domain: str):
         transformations = (standard_transformations + (implicit_multiplication_application,))
         
         # Pre-process: Normalize brackets for discrete signals
-        # ONLY normalize x[...] and h[...], NOT all brackets
         clean_eq = eq.replace('^', '**')
         # Selective bracket replacement for signal functions only
         clean_eq = re.sub(r'x\[([^\]]*)\]', r'x(\1)', clean_eq)
@@ -77,16 +77,27 @@ def check_linearity(eq: str, domain: str):
         x1 = Function('x1')
         x2 = Function('x2')
         
+        # Define combined input function
+        # We need a way to substitute x(...) with a*x1(...) + b*x2(...)
+        # SymPy's replace is robust for this
+        
         # S[a*x1 + b*x2]
-        combined_input = sys_expr.subs(x_func, lambda *args: a*x1(*args) + b*x2(*args) if args else a*x1(var) + b*x2(var))
+        def x_combined(*args):
+             if not args: return a*x1(var) + b*x2(var)
+             return a*x1(*args) + b*x2(*args)
+             
+        combined_input_expr = sys_expr.replace(x_func, x_combined)
+        # Also replace bare 'x' if present
+        combined_input_expr = combined_input_expr.subs(x_sym, a*x1(var) + b*x2(var))
         
         # a*S[x1] + b*S[x2]
-        s_x1 = sys_expr.subs(x_func, x1)
-        s_x2 = sys_expr.subs(x_func, x2)
+        s_x1 = sys_expr.replace(x_func, x1).subs(x_sym, x1(var))
+        s_x2 = sys_expr.replace(x_func, x2).subs(x_sym, x2(var))
+        
         superposition = a*s_x1 + b*s_x2
         
         # Check if they're equal
-        difference = simplify(combined_input - superposition)
+        difference = simplify(combined_input_expr - superposition)
         
         if difference == 0:
             return {'status': 'yes', 'explanation': 'Satisfies superposition (additivity + homogeneity)'}
@@ -94,6 +105,7 @@ def check_linearity(eq: str, domain: str):
             return {'status': 'no', 'explanation': f'Non-linear: Fails superposition test'}
             
     except Exception as e:
+        logger.warning(f"Symbolic linearity check failed: {e}. Falling back to regex.")
         # Fall back to regex-based heuristics
         non_linear_patterns = [
             (r'x\([^)]*\)\s*\*\*\s*[2-9]', 'Contains powers of input (x^2, x^3, etc.)'),
@@ -101,6 +113,9 @@ def check_linearity(eq: str, domain: str):
             (r'sin\(x[\(\[]', 'Contains sin(x(...))'),
             (r'cos\(x[\(\[]', 'Contains cos(x(...))'),
             (r'exp\(x[\(\[]', 'Contains exp(x(...))'),
+            (r'log\(x[\(\[]', 'Contains log(x(...))'),
+            (r'Abs\(x[\(\[]', 'Contains Abs(x(...))'),
+            (r'\|x[\(\[].*\|', 'Contains |x|'),
         ]
         
         for pattern, reason in non_linear_patterns:
@@ -111,7 +126,10 @@ def check_linearity(eq: str, domain: str):
         clean_eq_for_offset = re.sub(r'\([^)]*\)', '()', eq)
         clean_eq_for_offset = re.sub(r'\[[^\]]*\]', '[]', clean_eq_for_offset)
         
+        # Look for additive constants not attached to x
+        # This is hard to perfect with regex, but we try
         if re.search(r'[\+\-]\s*\d+(?!\s*[\*x\w\(\[])', clean_eq_for_offset):
+            # Exclude e-10 scientific notation type stuff
             if not re.search(r'e[\+\-]\d+', eq):
                 return {'status': 'no', 'explanation': 'Non-linear: Contains constant offset (affine system)'}
         
@@ -135,6 +153,8 @@ def check_time_invariance(eq: str, domain: str):
         return {'status': 'no', 'explanation': f'Time-variant: Contains explicit time variable {var} outside of input argument'}
         
     # Check for time scaling inside x(...)
+    # x(2t), x(-t), x(t^2)
+    # Check for anything multiplying var inside parens
     scaling_patterns = [
         rf'x[\(\[]\s*\d+\s*\*\s*{var}',
         rf'x[\(\[]\s*{var}\s*[\*/]',
@@ -157,6 +177,7 @@ def check_causality(eq: str, domain: str):
     
     # 1. Check for explicit future shifts: x(t + k) where k > 0
     # Match x(t + 0.5) or x[n + 1]
+    # We look for '+', but need to be careful of x(t + (-1)) which is causal
     if re.search(rf'x[\(\[]\s*{var}\s*\+\s*[\d\.]+', eq):
         return {'status': 'no', 'explanation': f'Non-causal: Depends on future input x({var}+k)'}
         
@@ -187,6 +208,7 @@ def check_memory(eq: str, domain: str):
             return {'status': 'no', 'explanation': 'Has memory: Contains differentiation'}
         
         # Check for delayed/advanced input x(t-...) or x(t+...)
+        # A bit loose regex but covers common cases x(t-1)
         if re.search(r'x\(t\s*[\-\+]', eq):
             return {'status': 'no', 'explanation': 'Has memory: Contains time shift x(t±...)'}
     
@@ -209,43 +231,40 @@ def calculate_impulse_response(eq: str, domain: str):
     try:
         # Define x as a Function for substitution
         x_func = Function('x')
+        x_sym = symbols('x')
         
         # Local dict for parsing
         local_dict = {
             't': t, 'n': n, 'x': x_func,
             'u': Heaviside, 'd': DiracDelta, 'delta': DiracDelta,
-            'sin': symbols('sin'), 'cos': symbols('cos'), 'exp': symbols('exp'),
+            'sin': sin, 'cos': cos, 'exp': exp, 'log': log,
             'Heaviside': Heaviside, 'DiracDelta': DiracDelta, 'KroneckerDelta': KroneckerDelta
         }
         transformations = (standard_transformations + (implicit_multiplication_application,))
         
         # Pre-process: Normalize brackets for discrete signals
-        # ONLY normalize x[...] and h[...], NOT all brackets
         clean_eq = eq.replace('^', '**')
         # Selective bracket replacement for signal functions only
         clean_eq = re.sub(r'x\[([^\]]*)\]', r'x(\1)', clean_eq)
         clean_eq = re.sub(r'h\[([^\]]*)\]', r'h(\1)', clean_eq)
+        
         expr = parse_expr(clean_eq, local_dict=local_dict, transformations=transformations)
         
         # Substitution Logic
-        # We need to replace x(arg) with DiracDelta(arg)
-        # Using .replace(Function, Substitution)
-        
         if domain == 'continuous':
             # Lambda to replace x(args) with DiracDelta(args)
             def sub_impl(*args):
                 if not args: return DiracDelta(t)
                 return DiracDelta(args[0])
             
-            h_expr = expr.replace(x_func, sub_impl)
+            h_expr = expr.replace(x_func, sub_impl).replace(x_sym, DiracDelta(t))
         else:
              # Lambda to replace x[args] -> KroneckerDelta(args, 0)
             def sub_impl(*args):
                 if not args: return KroneckerDelta(n, 0)
-                # If args[0] is n-1, we want KroneckerDelta(n-1, 0)
                 return KroneckerDelta(args[0], 0)
             
-            h_expr = expr.replace(x_func, sub_impl)
+            h_expr = expr.replace(x_func, sub_impl).replace(x_sym, KroneckerDelta(n, 0))
             
         return h_expr
     except Exception as e:
@@ -276,6 +295,7 @@ def check_stability_bibo(h_expr, domain: str):
             remaining_h = sum(remains)
             try:
                 abs_h = simplify(Abs(remaining_h))
+                # Check directly first
                 stability_limit = integrate(abs_h, (t, -oo, oo))
                 
                 if stability_limit.is_finite:
@@ -289,38 +309,33 @@ def check_stability_bibo(h_expr, domain: str):
             try:
                 from sympy import lambdify
                 h_fn = lambdify(t, remaining_h, modules=['numpy', 'sympy'])
-                t_test_pos = np.linspace(0, 500, 1000)
-                t_test_neg = np.linspace(-500, 0, 1000)
+                t_test = np.linspace(-100, 100, 2000)
+                h_vals = h_fn(t_test)
+                if np.isscalar(h_vals): h_vals = np.full_like(t_test, h_vals)
                 
-                # Check for decay at both ends
-                h_vals_pos = np.abs(h_fn(t_test_pos))
-                h_vals_neg = np.abs(h_fn(t_test_neg))
+                # Check for NaNs or Infs
+                if np.any(np.isinf(h_vals)) or np.any(np.isnan(h_vals)):
+                     return {'status': 'no', 'explanation': 'Unstable: Response blows up (NaN/Inf)'}
+
+                h_mag = np.abs(h_vals)
                 
-                # Heuristic: sum of absolute values should be relatively small
-                # compared to the range, indicating decay.
-                # Better Heuristic: Check for DECAY.
-                # If stable, the tail (end of response) should be close to 0.
-                
-                # Check end of response average magnitude
-                tail_pos = np.mean(h_vals_pos[-100:]) if len(h_vals_pos) > 100 else np.mean(h_vals_pos)
-                tail_neg = np.mean(h_vals_neg[:100]) if len(h_vals_neg) > 100 else np.mean(h_vals_neg)
-                
-                # Check peak magnitude
-                peak_pos = np.max(h_vals_pos) if len(h_vals_pos) > 0 else 0
-                peak_neg = np.max(h_vals_neg) if len(h_vals_neg) > 0 else 0
+                # Check end of response average magnitude vs peak
+                mid_idx = len(h_mag) // 2
+                peak = np.max(h_mag)
+                if peak < 1e-10:
+                     return {'status': 'yes', 'explanation': 'Stable: Response is effectively zero'}
+                     
+                tail_avg = np.mean(h_mag[:100]) + np.mean(h_mag[-100:])
                 
                 # If tail is significant compared to peak, it's not decaying -> Unstable
-                # Threshold: tail is > 5% of peak (and peak is non-trivial)
-                is_decaying_pos = (tail_pos < 0.05 * peak_pos) or (peak_pos < 1e-5)
-                is_decaying_neg = (tail_neg < 0.05 * peak_neg) or (peak_neg < 1e-5)
+                if tail_avg > 0.1 * peak:
+                     return {'status': 'no', 'explanation': 'Unstable: Impulse response does not appear to decay (Numerical test)'}
                 
-                # Also safeguard against growing exponentials: Max value shouldn't be at the very end
-                is_growing_pos = (h_vals_pos[-1] > h_vals_pos[len(h_vals_pos)//2] * 2) and (h_vals_pos[-1] > 1.0)
-                
-                if not is_decaying_pos or not is_decaying_neg or is_growing_pos:
-                    return {'status': 'no', 'explanation': 'Unstable: Impulse response does not appear to decay (Numerical test)'}
-                else:
-                    return {'status': 'yes', 'explanation': 'Stable: Impulse response appears to decay (Numerical test)'}
+                # Also safeguard against growing exponentials
+                if h_mag[-1] > h_mag[mid_idx] * 1.5:
+                     return {'status': 'no', 'explanation': 'Unstable: Growing response detected'}
+                     
+                return {'status': 'yes', 'explanation': 'Stable: Impulse response appears to decay (Numerical test)'}
             except Exception as e:
                 logger.debug(f"Stability check (numeric) failed: {e}")
                 
@@ -343,14 +358,21 @@ def check_stability_bibo(h_expr, domain: str):
                 logger.debug(f"Stability check (discrete sum) failed: {e}")
             
             # Fallback to numerical heuristic for stability
-            from sympy import lambdify
-            h_fn = lambdify(n, remaining_h, modules=['numpy', 'sympy'])
-            n_test = np.arange(-1000, 1001)
-            h_vals = np.abs(h_fn(n_test))
-            if np.sum(h_vals) > 1000: # Threshold for instability
-                 return {'status': 'no', 'explanation': 'Unstable: Impulse response does not appear to decay (Numerical test)'}
-            else:
-                 return {'status': 'yes', 'explanation': 'Stable: Impulse response appears to decay (Numerical test)'}
+            try:
+                from sympy import lambdify
+                h_fn = lambdify(n, remaining_h, modules=['numpy', 'sympy'])
+                n_test = np.arange(-100, 101)
+                h_vals = np.abs(h_fn(n_test))
+                
+                if np.sum(h_vals) > 1e5: # arbitrary large threshold
+                     return {'status': 'no', 'explanation': 'Unstable: Sum of |h[n]| is very large'}
+                
+                if h_vals[-1] > h_vals[len(h_vals)//2] * 2:
+                     return {'status': 'no', 'explanation': 'Unstable: Growing response'}
+                     
+                return {'status': 'yes', 'explanation': 'Stable: Impulse response appears to decay (Numerical test)'}
+            except:
+                pass
                 
         return {'status': 'unknown', 'explanation': 'Stability check inconclusive'}
                  
@@ -358,15 +380,7 @@ def check_stability_bibo(h_expr, domain: str):
          return {'status': 'unknown', 'explanation': f'Stability analysis error: {str(e)}'}
 
 def check_stability(eq: str, domain: str):
-    # Backward compatibility wrapper if needed, 
-    # but we will call check_stability_bibo directly in analyze_system if we calculate h(t) there.
-    # For now, let's keep the heuristic as fallback or replace it?
-    # User specifically requested integral method.
-    
-    # Let's calculate h(t) here temporarily? 
-    # Better: update analyze_system to pass h_expr or do it all there.
-    # To minimize refactor risk, I will implement a Hybrid approach.
-    
+    # Wrapper for backend compat if needed
     h_expr = calculate_impulse_response(eq, domain)
     return check_stability_bibo(h_expr, domain)
 
@@ -395,7 +409,6 @@ def calculate_system_response(equation: str, input_str: str, domain: str):
     Returns (output_expr_str, output_plot_data)
     """
     from api.core import symbolic
-    from sympy import symbols, Function
     
     # 1. Parse Input Expression
     input_expr = symbolic.parse_signal(input_str, domain)
@@ -403,6 +416,7 @@ def calculate_system_response(equation: str, input_str: str, domain: str):
     # 2. Parse System Equation
     var = t if domain == 'continuous' else n
     x_func = Function('x')
+    x_sym = symbols('x')
     
     # Use symbolic.parse_signal to get the base expression
     expr = symbolic.parse_signal(equation, domain)
@@ -411,12 +425,11 @@ def calculate_system_response(equation: str, input_str: str, domain: str):
     # We want to replace all occurrences of x(...) with input_expr evaluating its argument
     output_expr = expr.replace(x_func, lambda arg: input_expr.subs(var, arg))
     
-    # Handle symbolic 'x' if it was parsed as a symbol (without brackets/parens)
-    x_sym = symbols('x')
+    # Handle symbolic 'x' if it was parsed as a symbol
     output_expr = output_expr.subs(x_sym, input_expr)
     
     # 3. Generate Data
-    px, py = symbolic.generate_plot_data(str(output_expr), -5, 10, domain=domain)
+    px, py = symbolic.generate_plot_data(output_expr, -5, 10, domain=domain)
     
     output_str = str(output_expr).replace('**', '^').replace('DiracDelta', 'd').replace('Heaviside', 'u')
     if domain == 'discrete':

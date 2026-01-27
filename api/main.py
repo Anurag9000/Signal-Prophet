@@ -15,7 +15,8 @@ logger = logging.getLogger("SignalProphetAPI")
 
 app = FastAPI(title="Signals & Systems API")
 
-# Allow CORS for local React dev server
+# Setup generic CORS for development
+# In production, this should be restricted via environment variables
 origins = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
@@ -25,7 +26,7 @@ origins = [
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=["*"], # Allow all for robust dev experience as requested
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -78,7 +79,7 @@ def get_plot_data(req: PlotRequest):
     except Exception as e:
         logger.error(f"Plot failed: {e}")
         logger.error(traceback.format_exc())
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=422, detail=f"Plot Error: {str(e)}")
 
 @app.post("/transform")
 def get_transform(req: TransformRequest):
@@ -96,7 +97,7 @@ def get_transform(req: TransformRequest):
     except Exception as e:
         logger.error(f"Transform failed: {e}")
         logger.error(traceback.format_exc())
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=422, detail=f"Transform Error: {str(e)}")
 
 @app.post("/spectrum")
 def get_spectrum(req: SpectrumRequest):
@@ -104,12 +105,13 @@ def get_spectrum(req: SpectrumRequest):
         data = symbolic.compute_spectrum(req.expression, req.w_min, req.w_max, domain=req.domain)
         if data is None:
              # Return empty structure rather than error for softer UI handling
+             logger.warning("Spectrum calculation returned None")
              return {"magnitude": {"x": [], "y": []}, "phase": {"x": [], "y": []}}
         return data 
     except Exception as e:
         logger.error(f"Spectrum failed: {e}")
         logger.error(traceback.format_exc())
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=422, detail=f"Spectrum Analysis Error: {str(e)}")
 
 @app.post("/series")
 def get_series(req: SeriesRequest):
@@ -119,19 +121,19 @@ def get_series(req: SeriesRequest):
     except Exception as e:
         logger.error(f"Series failed: {e}")
         logger.error(traceback.format_exc())
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=422, detail=f"Fourier Series Error: {str(e)}")
 
 @app.post("/convolution")
 def get_convolution(req: ConvolutionRequest):
     try:
         data = symbolic.compute_convolution(req.x_expr, req.h_expr, domain=req.domain)
         if not data:
-            raise HTTPException(status_code=400, detail="Convolution failed")
+            raise HTTPException(status_code=400, detail="Convolution failed to produce data (likely invalid input range or functions)")
         return data
     except Exception as e:
         logger.error(f"Convolution failed: {e}")
         logger.error(traceback.format_exc())
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=422, detail=f"Convolution Error: {str(e)}")
 
 class InverseRequest(BaseModel):
     expression: str
@@ -165,7 +167,7 @@ def get_inverse(req: InverseRequest):
                 tx, ty = symbolic.generate_plot_data(expr_obj, -5, 10, domain=plot_domain)
                 time_data = {"x": tx, "y": ty}
             except Exception as plot_e:
-                logger.error(f"[/inverse] Time plot failed: {plot_e}")
+                logger.error(f"[/inverse] Time plot failed: {plot_e}") 
 
         return {
             "latex": latex_res,
@@ -175,7 +177,7 @@ def get_inverse(req: InverseRequest):
     except Exception as e:
          logger.error(f"Inverse failed: {e}")
          logger.error(traceback.format_exc())
-         raise HTTPException(status_code=400, detail=str(e))
+         raise HTTPException(status_code=422, detail=f"Inverse Transform Error: {str(e)}")
 
 class TransferFunctionRequest(BaseModel):
     expression: str
@@ -192,7 +194,7 @@ def parse_transfer_function_endpoint(req: TransferFunctionRequest):
     except Exception as e:
         logger.error(f"Transfer function parse failed: {e}")
         logger.error(traceback.format_exc())
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=422, detail=f"Parse Error: {str(e)}")
 
 class SystemAnalysisRequest(BaseModel):
     equation: str

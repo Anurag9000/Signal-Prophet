@@ -43,7 +43,8 @@ const ConvolutionLab = () => {
             setFrameIdx(0);
         } catch (e) {
             console.error(e);
-            setError("Simulation failed. Check syntax and ensure signal compatibility.");
+            const msg = e.response?.data?.detail || "Simulation failed. Check syntax and ensure signal compatibility.";
+            setError(msg);
         } finally {
             setLoading(false);
         }

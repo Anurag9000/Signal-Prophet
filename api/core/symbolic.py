@@ -1,4 +1,4 @@
-from api.core.utils import t, n, s, z, w, k, get_shared_modules_dict, clean_output_str
+from api.core.utils import t, n, s, z, w, k, get_shared_modules_dict, clean_output_str, VisualDirac
 import numpy as np
 import sympy
 import re
@@ -9,7 +9,7 @@ from sympy import (apart, fraction, solve, simplify, collect, Add, Piecewise,
                    lambdify, integrate, laplace_transform, fourier_transform, 
                    inverse_laplace_transform, inverse_fourier_transform, Abs, arg, 
                    fourier_series, Integral, Sum, sinc, Max, Min, sinh, cosh, tanh, 
-                   asin, acos, atan, log, KroneckerDelta, latex, symbols)
+                   asin, acos, atan, log, KroneckerDelta, latex, symbols, Poly, factorial)
 from sympy.parsing.sympy_parser import parse_expr, standard_transformations, implicit_multiplication_application
 
 # Setup logger
@@ -117,7 +117,6 @@ def compute_inverse_z(expr_str: str):
     Uses residue method or transform pairs lookup.
     """
     try:
-        from sympy import apart, Add, solve, fraction, simplify, Heaviside, oo
         expr = parse_signal(expr_str, 'discrete')
         
         # 1. Expand using partial fractions
@@ -149,46 +148,60 @@ def compute_inverse_z(expr_str: str):
                     return C2 * a**(n-1) * Heaviside(n-1)
                 
                 # Case 3: K * z / (z - a)^m (Repeated poles)
-                # K * z / (z - a)^2 -> K * n * a^(n-1) * u[n]
-                # General: z / (z-a)^m maps to terms involving combinations(n, m-1) * a^(n-m+1)
                 m = den.as_poly(z).degree()
                 if m >= 2:
-                    # Heuristic for m=2: C * z / (z-a)^2 -> C * n * a^(n-1) * u[n]
+                    # Heuristic: C * z / (z-a)^2 -> C * n * a^(n-1) * u[n]
                     C3 = simplify(term * (z - a)**2 / z)
                     if not C3.has(z):
                         return C3 * n * a**(n-1) * Heaviside(n)
                     
-                    # Heuristic for m=2 NO Z: C / (z-a)^2 -> C * (n-1) * a^(n-2) * u[n-1]
+                    # Heuristic: C / (z-a)^2 -> C * (n-1) * a^(n-2) * u[n-1]
                     C4 = simplify(term * (z - a)**2)
                     if not C4.has(z):
                          return C4 * (n-1) * a**(n-2) * Heaviside(n-1)
             
-            # Fallback: Inverse Z using residue or lookup is complex for SymPy.
-            # return None for unrecognized forms
+            # Fallback for simple delays: z^-k -> delta[n-k]
+            # Check if term is of form C * z**k
+            if term.is_Pow and term.base == z:
+                 # z**-k
+                 exponent = term.exp
+                 if exponent.is_integer:
+                     return KroneckerDelta(n, -exponent)
+            
+            # Check if term is just z
+            if term == z:
+                return KroneckerDelta(n, -1) # z^1 -> delta[n+1]? standard z trans is sum x[n]z^-n. So delta[n+1] -> z.
+
             return None
 
         inv_expr = 0
+        failed = False
+        
         if isinstance(expanded, Add):
             for arg in expanded.args:
                 res = invert_term(arg)
                 if res is not None:
                     inv_expr += res
                 else:
-                    # If any term fails, we might still want to return partial result or error
-                    pass 
+                    failed = True
+                    break
         else:
-            inv_expr = invert_term(expanded)
+            res = invert_term(expanded)
+            if res is not None:
+                inv_expr = res
+            else:
+                failed = True
 
-        if inv_expr is None or inv_expr == 0:
-             # Try Partial Fraction on X(z)/z which is common strategy
-             # X(z)/z = A/(z-a) + ... -> X(z) = A*z/(z-a) ...
+        # Second Strategy: Partial Fraction on X(z)/z
+        if failed or inv_expr == 0:
              try:
                  expanded_div_z = apart(expr/z, z)
                  inv_expr_2 = 0
+                 failed_2 = False
                  
                  def invert_term_div_z(term):
                      # term is K / (z-a)^m
-                     # mult by z -> K*z / (z-a)^m
+                     # corresponding to X(z) part K*z / (z-a)^m
                      n_t, d_t = fraction(term)
                      poles = solve(d_t, z)
                      if len(poles) == 1:
@@ -197,10 +210,10 @@ def compute_inverse_z(expr_str: str):
                          K = simplify(term * (z-a)**m)
                          
                          if m == 1:
-                             # K/(z-a) * z -> K*a^n * u[n]
+                             # K/(z-a) -> K*z/(z-a) -> K*a^n * u[n]
                              return K * a**n * Heaviside(n)
                          elif m == 2:
-                             # K/(z-a)^2 * z -> K * n * a^(n-1) * u[n]
+                             # K/(z-a)^2 -> K*z/(z-a)^2 -> K * n * a^(n-1) * u[n]
                              return K * n * a**(n-1) * Heaviside(n)
                      return None
 
@@ -208,22 +221,24 @@ def compute_inverse_z(expr_str: str):
                      for arg in expanded_div_z.args:
                          r = invert_term_div_z(arg)
                          if r is not None: inv_expr_2 += r
+                         else: failed_2 = True; break
                  else:
                      inv_expr_2 = invert_term_div_z(expanded_div_z)
+                     if inv_expr_2 is None: failed_2 = True
                      
-                 if inv_expr_2 is not None and inv_expr_2 != 0:
+                 if not failed_2:
                      inv_expr = inv_expr_2
+                     failed = False
              except:
                  pass
 
-        if inv_expr is None or inv_expr == 0:
+        if failed:
             return "Inverse Z-Transform: Form not yet supported symbolically.", None
         
         return clean_output_str(latex(inv_expr), domain='discrete').replace('\\theta', 'u'), inv_expr
     except Exception as e:
         # 2. Handle simple delays/advances that SymPy might struggle with directly
         # Case: z**(-m) -> delta[n-m]
-        import re
         delay_match = re.match(r'^z\^?\(?(\-?\d+)\)?$', expr_str.strip())
         if delay_match:
             shift = int(delay_match.group(1))
@@ -240,9 +255,6 @@ def compute_inverse_fourier(expr_str: str, domain: str = 'continuous'):
     Uses transform pair lookup for common rational functions.
     """
     try:
-        import re
-        from sympy import fraction, solve, simplify, collect, Abs
-        
         # Replace j/i/I with sympy I
         clean_expr = expr_str
         clean_expr = re.sub(r'\bI\b', 'I', clean_expr)
@@ -295,12 +307,11 @@ def compute_inverse_fourier(expr_str: str, domain: str = 'continuous'):
                 # Transform pair: K / (1 - a*exp(-I*w)) <-> K * a^n * u[n]
                 f = K * a**n * Heaviside(n)
                 logger.debug(f"[compute_inverse_fourier] Using DTFT pair: {f}")
+                
+                return clean_output_str(latex(f), domain), f
             else:
                 logger.debug(f"[compute_inverse_fourier] Not standard DTFT form, trying numerical/general approach")
-                # DTFT inverse is basically (1/2pi) * int(X * exp(jwn) dw) from -pi to pi
-                # SymPy doesn't have a direct DTFT inverse that works reliably with 'w'
-                # So we return a specialized message or try to use Z-transform logic if applicable
-                return f"Inverse DTFT: Complex form {expr}. Use Z-transform for rational forms.", None
+                return f"Inverse DTFT: Complex form not yet supported. Use Z-transform for rational forms.", None
         else:  # Continuous
             # CTFT Inverse: X(jω) -> x(t)
             # Standard form: K/(I*w + a) <-> K*e^(-at)*u(t) for a > 0
@@ -339,24 +350,28 @@ def compute_inverse_fourier(expr_str: str, domain: str = 'continuous'):
                         pass
                     return None
                 
+                f = 0
+                failed = False
+                
                 if isinstance(expanded, Add):
-                    f = 0
                     for arg in expanded.args:
                         term_res = invert_ct_term(arg)
                         if term_res is not None:
                             f += term_res
+                        else:
+                            failed = True
                 else:
                     f = invert_ct_term(expanded)
+                    if f is None: failed = True
                 
-                if f is None or f == 0:
-                    logger.debug(f"[compute_inverse_fourier] Partial fractions approach returned zero/None, trying SymPy")
+                if failed or f == 0:
+                    logger.debug(f"[compute_inverse_fourier] Partial fractions approach incomplete, trying SymPy")
                     # Try direct inverse if it's a simple rational form of w
                     f = inverse_fourier_transform(expr.subs(w, 2*pi*symbols('f')), symbols('f'), t)
             except Exception as e_apart:
                 logger.debug(f"[compute_inverse_fourier] apart(jw) failed: {e_apart}, trying SymPy")
                 f = inverse_fourier_transform(expr.subs(w, 2*pi*symbols('f')), symbols('f'), t)
         
-        # Simplify and format
         # Simplify and format
         f = simplify(f)
         return clean_output_str(latex(f), domain), f
@@ -401,19 +416,19 @@ def evaluate_frequency_response(expr_str: str, w_min: float = -10, w_max: float 
                 vals = np.nan_to_num(vals)
         except:
             # Fallback for complex issues or singularities: eval one by one (slower but safer)
-            # Optimize: Use np.vectorize which might be slightly faster than list comp
             try:
                 # Create a robust checked function
                 def safe_eval(v):
                     try:
                         return complex(expr.subs(var, v).evalf())
                     except:
-                        return 0j
+                        return 0j # safe eval failure
                 
                 vec_eval = np.vectorize(safe_eval)
                 vals = vec_eval(w_vals)
-            except:
-                 vals = np.array([complex(expr.subs(var, v).evalf()) for v in w_vals])
+            except Exception as e:
+                 logger.error(f"Evaluating frequency response fallback failed: {e}")
+                 vals = np.zeros_like(w_vals, dtype=complex) # last resort
 
         mag = np.abs(vals)
         phase = np.angle(vals)
