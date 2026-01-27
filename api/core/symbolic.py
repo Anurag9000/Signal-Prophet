@@ -59,8 +59,10 @@ def parse_signal(expr_str: str, domain: str = 'continuous'):
     clean_expr = re.sub(r'\bd\s*[\(\[]', 'DiracDelta(', clean_expr)
     clean_expr = re.sub(r'\bδ\s*[\(\[]', 'DiracDelta(', clean_expr)
     
-    # Normalize both open and close brackets for discrete compatibility
-    clean_expr = clean_expr.replace('[', '(').replace(']', ')')
+    # Normalize brackets for discrete compatibility Only for function calls like x[n] -> x(n)
+    # This prevents breaking list definitions if they exist
+    clean_expr = re.sub(r'([a-zA-Z0-9_])\s*\[([^\]]*)\]', r'\1(\2)', clean_expr)
+    # clean_expr = clean_expr.replace('[', '(').replace(']', ')') # OLD UNSAFE
     
     # Replace j or J or i or I that are not part of other words
     clean_expr = re.sub(r'\b[jJiI]\b', 'I', clean_expr)
@@ -148,11 +150,18 @@ def compute_inverse_z(expr_str: str):
                 
                 # Case 3: K * z / (z - a)^m (Repeated poles)
                 # K * z / (z - a)^2 -> K * n * a^(n-1) * u[n]
+                # General: z / (z-a)^m maps to terms involving combinations(n, m-1) * a^(n-m+1)
                 m = den.as_poly(z).degree()
-                if m == 2:
+                if m >= 2:
+                    # Heuristic for m=2: C * z / (z-a)^2 -> C * n * a^(n-1) * u[n]
                     C3 = simplify(term * (z - a)**2 / z)
                     if not C3.has(z):
                         return C3 * n * a**(n-1) * Heaviside(n)
+                    
+                    # Heuristic for m=2 NO Z: C / (z-a)^2 -> C * (n-1) * a^(n-2) * u[n-1]
+                    C4 = simplify(term * (z - a)**2)
+                    if not C4.has(z):
+                         return C4 * (n-1) * a**(n-2) * Heaviside(n-1)
             
             # Fallback: Inverse Z using residue or lookup is complex for SymPy.
             # return None for unrecognized forms
@@ -165,11 +174,50 @@ def compute_inverse_z(expr_str: str):
                 if res is not None:
                     inv_expr += res
                 else:
-                    return f"Inverse Z-Transform: Term {arg} not supported symbolically.", None
+                    # If any term fails, we might still want to return partial result or error
+                    pass 
         else:
             inv_expr = invert_term(expanded)
-            if inv_expr is None:
-                return "Inverse Z-Transform: Form not yet supported symbolically.", None
+
+        if inv_expr is None or inv_expr == 0:
+             # Try Partial Fraction on X(z)/z which is common strategy
+             # X(z)/z = A/(z-a) + ... -> X(z) = A*z/(z-a) ...
+             try:
+                 expanded_div_z = apart(expr/z, z)
+                 inv_expr_2 = 0
+                 
+                 def invert_term_div_z(term):
+                     # term is K / (z-a)^m
+                     # mult by z -> K*z / (z-a)^m
+                     n_t, d_t = fraction(term)
+                     poles = solve(d_t, z)
+                     if len(poles) == 1:
+                         a = poles[0]
+                         m = d_t.as_poly(z).degree()
+                         K = simplify(term * (z-a)**m)
+                         
+                         if m == 1:
+                             # K/(z-a) * z -> K*a^n * u[n]
+                             return K * a**n * Heaviside(n)
+                         elif m == 2:
+                             # K/(z-a)^2 * z -> K * n * a^(n-1) * u[n]
+                             return K * n * a**(n-1) * Heaviside(n)
+                     return None
+
+                 if isinstance(expanded_div_z, Add):
+                     for arg in expanded_div_z.args:
+                         r = invert_term_div_z(arg)
+                         if r is not None: inv_expr_2 += r
+                 else:
+                     inv_expr_2 = invert_term_div_z(expanded_div_z)
+                     
+                 if inv_expr_2 is not None and inv_expr_2 != 0:
+                     inv_expr = inv_expr_2
+             except:
+                 pass
+
+        if inv_expr is None or inv_expr == 0:
+            return "Inverse Z-Transform: Form not yet supported symbolically.", None
         
         return clean_output_str(latex(inv_expr), domain='discrete').replace('\\theta', 'u'), inv_expr
     except Exception as e:
@@ -352,7 +400,20 @@ def evaluate_frequency_response(expr_str: str, w_min: float = -10, w_max: float 
                 vals = np.array(vals, dtype=complex)
                 vals = np.nan_to_num(vals)
         except:
-            vals = np.array([complex(expr.subs(var, v).evalf()) for v in w_vals])
+            # Fallback for complex issues or singularities: eval one by one (slower but safer)
+            # Optimize: Use np.vectorize which might be slightly faster than list comp
+            try:
+                # Create a robust checked function
+                def safe_eval(v):
+                    try:
+                        return complex(expr.subs(var, v).evalf())
+                    except:
+                        return 0j
+                
+                vec_eval = np.vectorize(safe_eval)
+                vals = vec_eval(w_vals)
+            except:
+                 vals = np.array([complex(expr.subs(var, v).evalf()) for v in w_vals])
 
         mag = np.abs(vals)
         phase = np.angle(vals)

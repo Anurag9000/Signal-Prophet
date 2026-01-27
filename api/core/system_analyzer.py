@@ -298,8 +298,27 @@ def check_stability_bibo(h_expr, domain: str):
                 
                 # Heuristic: sum of absolute values should be relatively small
                 # compared to the range, indicating decay.
-                if np.sum(h_vals_pos) > 100 or np.sum(h_vals_neg) > 100:
-                    return {'status': 'no', 'explanation': 'Unstable: Impulse response does not appear to decay sufficienty for BIBO stability (Numerical test)'}
+                # Better Heuristic: Check for DECAY.
+                # If stable, the tail (end of response) should be close to 0.
+                
+                # Check end of response average magnitude
+                tail_pos = np.mean(h_vals_pos[-100:]) if len(h_vals_pos) > 100 else np.mean(h_vals_pos)
+                tail_neg = np.mean(h_vals_neg[:100]) if len(h_vals_neg) > 100 else np.mean(h_vals_neg)
+                
+                # Check peak magnitude
+                peak_pos = np.max(h_vals_pos) if len(h_vals_pos) > 0 else 0
+                peak_neg = np.max(h_vals_neg) if len(h_vals_neg) > 0 else 0
+                
+                # If tail is significant compared to peak, it's not decaying -> Unstable
+                # Threshold: tail is > 5% of peak (and peak is non-trivial)
+                is_decaying_pos = (tail_pos < 0.05 * peak_pos) or (peak_pos < 1e-5)
+                is_decaying_neg = (tail_neg < 0.05 * peak_neg) or (peak_neg < 1e-5)
+                
+                # Also safeguard against growing exponentials: Max value shouldn't be at the very end
+                is_growing_pos = (h_vals_pos[-1] > h_vals_pos[len(h_vals_pos)//2] * 2) and (h_vals_pos[-1] > 1.0)
+                
+                if not is_decaying_pos or not is_decaying_neg or is_growing_pos:
+                    return {'status': 'no', 'explanation': 'Unstable: Impulse response does not appear to decay (Numerical test)'}
                 else:
                     return {'status': 'yes', 'explanation': 'Stable: Impulse response appears to decay (Numerical test)'}
             except Exception as e:

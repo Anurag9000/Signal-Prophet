@@ -63,8 +63,29 @@ def test_convolution():
     else:
         print("❌ Convolution failed.")
 
+def test_inverse_z():
+    separator("INVERSE Z-TRANSFORM")
+    # Test case that is failing
+    expr = "z/(z-0.5)**2"
+    print(f"Testing: {expr}")
+    try:
+        res, obj = symbolic.compute_inverse_z(expr)
+        print(f"Result String: {res}")
+        print(f"Result Object: {obj}")
+        if obj is None:
+            print("❌ Failed: obj is None")
+        else:
+            print("✅ Success")
+    except Exception as e:
+        print(f"❌ Exception: {e}")
+
+
 if __name__ == "__main__":
     test_parsing()
     test_spectrum()
     test_series()
+    test_parsing()
+    test_spectrum()
+    test_series()
     test_convolution()
+    test_inverse_z()
