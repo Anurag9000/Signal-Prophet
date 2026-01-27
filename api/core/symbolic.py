@@ -1,8 +1,14 @@
-from sympy import symbols, Heaviside, DiracDelta, exp, sin, cos, tan, pi, I, oo, sympify, lambdify, integrate, laplace_transform, fourier_transform, inverse_laplace_transform, inverse_fourier_transform, Abs, arg, fourier_series, Integral, Sum, sinc, Max, Min, Piecewise, sinh, cosh, tanh, asin, acos, atan, log
-from sympy.parsing.sympy_parser import parse_expr, standard_transformations, implicit_multiplication_application
-from sympy.abc import t, n, s, z, w, k
+from api.core.utils import t, n, s, z, w, k, get_shared_modules_dict, clean_output_str
 import numpy as np
 import sympy
+import re
+from sympy import (apart, fraction, solve, simplify, collect, Add, Piecewise,
+                   Heaviside, DiracDelta, exp, sin, cos, tan, pi, I, oo, sympify, 
+                   lambdify, integrate, laplace_transform, fourier_transform, 
+                   inverse_laplace_transform, inverse_fourier_transform, Abs, arg, 
+                   fourier_series, Integral, Sum, sinc, Max, Min, sinh, cosh, tanh, 
+                   asin, acos, atan, log, KroneckerDelta, latex, symbols)
+from sympy.parsing.sympy_parser import parse_expr, standard_transformations, implicit_multiplication_application
 
 # Define custom symbols and functions for parsing
 # 'j' is often used in engineering for sqrt(-1)
@@ -16,7 +22,6 @@ def parse_signal(expr_str: str, domain: str = 'continuous'):
     """
     # Pre-processing: Convert |expr| to Abs(expr)
     # Handle nested cases by replacing innermost first
-    import re
     
     def convert_abs_notation(s):
         """Convert |expr| to Abs(expr), handling nested cases."""
@@ -44,37 +49,16 @@ def parse_signal(expr_str: str, domain: str = 'continuous'):
     # Replace d(t) with DiracDelta(t)
     # Handle both () and [] for discrete/continuous convenience
     
-    clean_expr = expr_str.replace('u(', 'Heaviside(').replace('u[', 'Heaviside(')
-    clean_expr = clean_expr.replace('d(', 'DiracDelta(').replace('d[', 'DiracDelta(')
-    clean_expr = clean_expr.replace('δ(', 'DiracDelta(').replace('δ[', 'DiracDelta(')
-    clean_expr = clean_expr.replace(']', ')') # normalize brackets
+    # More robust substitution for engineering aliases
+    clean_expr = re.sub(r'\bu\s*[\(\[]', 'Heaviside(', expr_str)
+    clean_expr = re.sub(r'\bd\s*[\(\[]', 'DiracDelta(', clean_expr)
+    clean_expr = re.sub(r'\bδ\s*[\(\[]', 'DiracDelta(', clean_expr)
     
-    # Handle 'j' as imaginary unit 'I' IF it's likely being used as a number
-    # Simple regex or replace 'j' with 'I' carefully? 
-    # Safest is to just replace 'j' if it's not part of a word. 
-    # But user might type "1+j*w". 
-    # Let's simple replace 'j' and 'J' with 'I' but watch out for 'sin' 'adj' etc.
-    # Given the context, we can check for word boundaries or assume users don't use variables starting with j.
-    # Actually, simplest implementation for now:
-    import re
-    # Replace j or J that are not preceded by a letter (to avoid replacing 'adj' or 'obj')
-    # and not followed by a letter (so we don't break 'jupiter')
-    # Use simple replace for " j " "J" etc?
-    # User requested "I interchangable with i or J or j"
-    # We will assume 'j' is 'I' unless it's in a known function name.
+    # Normalize both open and close brackets for discrete compatibility
+    clean_expr = clean_expr.replace('[', '(').replace(']', ')')
     
-    # Primitive approach for now:
-    # 1. Replace known keywords to placeholders? No.
-    # 2. Just do simple replacement of "j" -> "I" where safe?
-    # Let's just blindly replace j with I and see if it breaks anything common. 'j' is rare in Python/SymPy func names used here.
-    # 'conjugate' has j. 'adj' has j.
-    # Let's replace only 'j' surrounded by non-alpha or start/end.
-    clean_expr = re.sub(r'(?<![a-zA-Z])j(?![a-zA-Z])', 'I', clean_expr)
-    clean_expr = re.sub(r'(?<![a-zA-Z])J(?![a-zA-Z])', 'I', clean_expr)
-    
-    # Also 'i' ? SymPy uses 'I'. Python uses '1j'.
-    # If user types '3i', we want '3*I'.
-    clean_expr = re.sub(r'(?<![a-zA-Z])i(?![a-zA-Z])', 'I', clean_expr)
+    # Replace j or J or i or I that are not part of other words
+    clean_expr = re.sub(r'\b[jJiI]\b', 'I', clean_expr)
 
     # Custom context
     local_dict = {
@@ -93,7 +77,7 @@ def parse_signal(expr_str: str, domain: str = 'continuous'):
     # rect(t) = 1 if |t| < 0.5 else 0
     # tri(t) = max(0, 1 - |t|)
     # We can inject these as lambda functions or expressions
-    local_dict['rect'] = lambda x: Heaviside(x + 1/2) - Heaviside(x - 1/2)
+    local_dict['rect'] = lambda x: Heaviside(x + 1/2) * Heaviside(1/2 - x)
     local_dict['tri'] = lambda x: Max(0, 1 - Abs(x))
     
     transformations = (standard_transformations + (implicit_multiplication_application,))
@@ -105,6 +89,86 @@ def parse_signal(expr_str: str, domain: str = 'continuous'):
         raise ValueError(f"Failed to parse expression: {str(e)}")
 
 # ... (skip generate_plot_data, compute_laplace, compute_fourier) ...
+
+def compute_z(expr_str: str):
+    """Computes Z-transform: x[n] -> X(z) using Sum(x[n]*z**-n)"""
+    try:
+        expr = parse_signal(expr_str, 'discrete')
+        from sympy import summation
+        # Bilateral Z-transform: sum x[n] * z**-n for n from -oo to oo
+        # Many common signals are causal (u[n]), so we try to evaluate the sum
+        X = summation(expr * z**(-n), (n, -oo, oo))
+        
+        from sympy import latex
+        return latex(X).replace('**', '^').replace('I', 'j')
+    except Exception as e:
+        return f"Could not compute Z-Transform: {str(e)}"
+
+def compute_inverse_z(expr_str: str):
+    """
+    Computes Inverse Z-transform: X(z) -> x[n]
+    Uses residue method or transform pairs lookup.
+    """
+    try:
+        from sympy import apart, Add, solve, fraction, simplify, Heaviside, oo
+        expr = parse_signal(expr_str, 'discrete')
+        
+        # 1. Expand using partial fractions
+        try:
+            expanded = apart(expr, z)
+        except:
+            expanded = expr
+
+        def invert_term(term):
+            """
+            Inverts a single rational term of X(z).
+            Handles K / (1 - a*z^-1) which is (K * z) / (z - a)
+            And K / (z - a)^m
+            """
+            num, den = fraction(term)
+            poles = solve(den, z)
+            
+            # Case 1: K * z / (z - a) -> K * a^n * u[n]
+            if len(poles) == 1:
+                a = poles[0]
+                # Try to see if it matches C * z / (z - a)
+                C = simplify(term * (z - a) / z)
+                if not C.has(z):
+                    return C * a**n * Heaviside(n)
+                
+                # Case 2: K / (z - a) -> K * a^(n-1) * u[n-1]
+                C2 = simplify(term * (z - a))
+                if not C2.has(z):
+                    return C2 * a**(n-1) * Heaviside(n-1)
+                
+                # Case 3: K * z / (z - a)^m (Repeated poles)
+                # K * z / (z - a)^2 -> K * n * a^(n-1) * u[n]
+                m = den.as_poly(z).degree()
+                if m == 2:
+                    C3 = simplify(term * (z - a)**2 / z)
+                    if not C3.has(z):
+                        return C3 * n * a**(n-1) * Heaviside(n)
+            
+            # Fallback: Inverse Z using residue or lookup is complex for SymPy.
+            # return None for unrecognized forms
+            return None
+
+        inv_expr = 0
+        if isinstance(expanded, Add):
+            for arg in expanded.args:
+                res = invert_term(arg)
+                if res is not None:
+                    inv_expr += res
+                else:
+                    return f"Inverse Z-Transform: Term {arg} not supported symbolically."
+        else:
+            inv_expr = invert_term(expanded)
+            if inv_expr is None:
+                return "Inverse Z-Transform: Form not yet supported symbolically."
+        
+        return latex(inv_expr).replace('\\theta', 'u').replace('**', '^').replace('I', 'j')
+    except Exception as e:
+        return f"Inverse Z-Transform Failed: {str(e)}"
 
 def compute_inverse_fourier(expr_str: str, domain: str = 'continuous'):
     """
@@ -135,90 +199,80 @@ def compute_inverse_fourier(expr_str: str, domain: str = 'continuous'):
             # Common form: 1/(1 - a*e^(-jω)) <-> a^n * u[n] for |a| < 1
             # In SymPy: exp(I*w) or exp(-I*w)
             
+            # Get Numerator and Denominator
             numer, denom = fraction(expr)
-            print(f"[compute_inverse_fourier] Numerator: {numer}, Denominator: {denom}")
-            
-            # Check if denom has form: 1 - a*exp(-I*w) or similar
-            # Expand and collect terms
-            denom_expanded = denom.expand()
-            
-            # Try to match pattern: c0 + c1*exp(I*w) or c0 + c1*exp(-I*w)
-            # For 1/(1 - 0.8*exp(-I*w)), denom = 1 - 0.8*exp(-I*w) = -0.8*exp(-I*w) + 1
+            denom_expanded = simplify(denom)
             
             # Get coefficient of exp(-I*w)
             exp_neg = exp(-I*w)
             exp_pos = exp(I*w)
             
-            coeff_neg = denom_expanded.coeff(exp_neg, 1)
-            coeff_pos = denom_expanded.coeff(exp_pos, 1)
-            const = denom_expanded.as_coeff_Add()[0] if not denom_expanded.has(exp_neg, exp_pos) else denom_expanded.subs([(exp_neg, 0), (exp_pos, 0)])
+            # Substitute exp(-Iw) with a dummy variable to find its coefficient
+            v_dummy = symbols('v_dummy')
+            denom_v = denom_expanded.subs(exp_neg, v_dummy)
+            coeff_neg = denom_v.coeff(v_dummy, 1) if not denom_v.has(exp_pos) else 0
+            
+            # Similarly for exp(Iw)
+            denom_v_pos = denom_expanded.subs(exp_pos, v_dummy)
+            coeff_pos = denom_v_pos.coeff(v_dummy, 1) if not denom_v_pos.has(exp_neg) else 0
+            
+            const = denom_expanded.subs([(exp_neg, 0), (exp_pos, 0)])
             
             print(f"[compute_inverse_fourier] Coeff of exp(-Iw): {coeff_neg}, Coeff of exp(Iw): {coeff_pos}, Const: {const}")
             
-            # Standard form: 1 - a*exp(-I*w) where const=1, coeff_neg=-a
-            if const == 1 and coeff_neg != 0 and coeff_pos == 0:
-                a = -coeff_neg
+            # Standard form: 1 / (1 - a*exp(-I*w)) where const=1, coeff_neg=-a
+            if coeff_neg != 0 and coeff_pos == 0:
+                a = -coeff_neg / const
+                K = numer / const
                 print(f"[compute_inverse_fourier] Detected a = {a}")
                 
-                # Check if |a| < 1 for stability
-                if Abs(a) < 1:
-                    # Transform pair: numer/(1 - a*exp(-I*w)) <-> numer * a^n * u[n]
-                    f = numer * a**n * Heaviside(n)
-                    print(f"[compute_inverse_fourier] Using DTFT pair: {f}")
-                else:
-                    print(f"[compute_inverse_fourier] |a| >= 1, unstable, trying SymPy")
-                    f = inverse_fourier_transform(expr, w, n)
+                # Transform pair: K / (1 - a*exp(-I*w)) <-> K * a^n * u[n]
+                f = K * a**n * Heaviside(n)
+                print(f"[compute_inverse_fourier] Using DTFT pair: {f}")
             else:
-                print(f"[compute_inverse_fourier] Not standard DTFT form, trying SymPy")
-                f = inverse_fourier_transform(expr, w, n)
-                
+                print(f"[compute_inverse_fourier] Not standard DTFT form, trying numerical/general approach")
+                # DTFT inverse is basically (1/2pi) * int(X * exp(jwn) dw) from -pi to pi
+                # SymPy doesn't have a direct DTFT inverse that works reliably with 'w'
+                # So we return a specialized message or try to use Z-transform logic if applicable
+                return f"Inverse DTFT: Complex form {expr}. Use Z-transform for rational forms."
         else:  # Continuous
             # CTFT Inverse: X(jω) -> x(t)
             # Standard form: K/(I*w + a) <-> K*e^(-at)*u(t) for a > 0
             
-            numer, denom = fraction(expr)
-            print(f"[compute_inverse_fourier] Numerator: {numer}, Denominator: {denom}")
-            
-            # Extract coefficients from denominator: I*w + a
-            denom_expanded = denom.expand()
-            denom_collected = collect(denom_expanded, w)
-            
-            coeff_w = denom_collected.coeff(w, 1)
-            const_term = denom_collected.coeff(w, 0)
-            
-            print(f"[compute_inverse_fourier] Coeff of w: {coeff_w}, Constant: {const_term}")
-            
-            # For standard form I*w + a, we have coeff_w = I, const_term = a
-            if coeff_w == I and const_term.is_real and const_term > 0:
-                a = const_term
-                # Transform pair: numer/(I*w + a) <-> numer * e^(-a*t) * u(t)
-                f = numer * exp(-a * t) * Heaviside(t)
-                print(f"[compute_inverse_fourier] Using CTFT pair with a={a}: {f}")
-            else:
-                # Try SymPy as fallback
-                print(f"[compute_inverse_fourier] Not standard form, trying SymPy")
-                f = inverse_fourier_transform(expr, w, t)
+            # Mask 'I*w' as a single variable 'jw' to use apart()
+            jw = symbols('jw')
+            expr_jw = expr.subs(I*w, jw)
+            try:
+                expanded = apart(expr_jw, jw)
+                
+                def invert_ct_term(term):
+                    n_t, d_t = fraction(term)
+                    poles = solve(d_t, jw)
+                    if len(poles) == 1:
+                        p = poles[0] # jw = p -> jw - p = 0
+                        # K / (jw - p) -> K * exp(p*t) * u(t) if Re(p) < 0
+                        K = simplify(term * (jw - p))
+                        if not K.has(jw):
+                            return K * exp(p * t) * Heaviside(t)
+                    return None
+                
+                if isinstance(expanded, Add):
+                    f = sum([invert_ct_term(a) for a in expanded.args if invert_ct_term(a) is not None])
+                else:
+                    f = invert_ct_term(expanded)
+                
+                if f is None or f == 0:
+                    print(f"[compute_inverse_fourier] Partial fractions failed, trying SymPy")
+                    f = inverse_fourier_transform(expr, w, t)
+            except:
+                print(f"[compute_inverse_fourier] apart(jw) failed, trying SymPy")
+                # Scale w properly for SymPy: SymPy uses f (freq) instead of w (ang freq)
+                # inverse_fourier_transform(F, f, t)
+                f = inverse_fourier_transform(expr.subs(w, 2*pi*symbols('f')), symbols('f'), t)
         
         # Simplify and format
         f = simplify(f)
-        
-        # Format for display - use proper notation based on domain
-        if domain == 'discrete':
-            # For discrete: Heaviside(n) -> u[n], keep ** for powers
-            res_str = str(f).replace('Heaviside(n)', 'Heaviside[n]').replace('**', '^').replace('I', 'j')
-            res_str = res_str.replace('Heaviside', 'u').replace('DiracDelta', 'd')
-        else:
-            # For continuous: Heaviside(t) -> u(t)
-            res_str = str(f).replace('**', '^').replace('Heaviside', 'u').replace('DiracDelta', 'd').replace('I', 'j')
-        
-        print(f"[compute_inverse_fourier] Result: {res_str}")
-        
-        # IMPORTANT: For plotting, return the SymPy expression string that can be parsed
-        # Convert back to parseable format
-        plot_str = str(f)  # Keep SymPy format for parsing
-        print(f"[compute_inverse_fourier] Plot string: {plot_str}")
-        
-        return res_str  # Return formatted for display
+        return latex(f).replace('\\theta', 'u').replace('**', '^').replace('I', 'j')
         
     except Exception as e:
         print(f"[compute_inverse_fourier] ERROR: {e}")
@@ -230,75 +284,40 @@ def compute_inverse_fourier(expr_str: str, domain: str = 'continuous'):
 def evaluate_frequency_response(expr_str: str, w_min: float = -10, w_max: float = 10, num_points: int = 400, type: str = 'fourier'):
     """
     Evaluates X(w) for plotting frequency domain expressions.
-    Handles I, i, J, j all as imaginary unit.
+    Consolidated to use parse_signal for consistent alias/imaginary unit handling.
     """
     try:
-        import re
+        # Determine domain for parsing
+        parse_domain = 'continuous'
+        if 'z' in expr_str.lower():
+            parse_domain = 'discrete'
+            
+        expr = parse_signal(expr_str, parse_domain)
         
-        # The \b boundaries ensure we don't match 'i' in 'sin' or 'pi'
-        clean_expr = expr_str
-        clean_expr = re.sub(r'\bI\b', '1j', clean_expr)
-        clean_expr = re.sub(r'\bi\b', '1j', clean_expr) 
-        clean_expr = re.sub(r'\bJ\b', '1j', clean_expr)
-        clean_expr = re.sub(r'\bj\b', '1j', clean_expr)
-        
-        # Add support for common multiplication without * like '2j' if needed,
-        # but the current parser usually expects * or implicit multiplication handles it.
-        # Ensure '1j' is not replaced again by checking for it specifically if we add more.
-        
-        print(f"[evaluate_frequency_response] Original: {expr_str}")
-        print(f"[evaluate_frequency_response] Cleaned: {clean_expr}")
-        
-        # Generate w values
+        # Determine variable to evaluate against
+        var = w
+        if expr.has(s): var = s
+        elif expr.has(z): var = z
+        elif expr.has(w): var = w
+        elif expr.has(n): var = n
+
+        # Lambdify for numerical evaluation using shared modules
+        m_dict = get_shared_modules_dict(parse_domain)
+        f_num = lambdify(var, expr, modules=m_dict)
         w_vals = np.linspace(w_min, w_max, num_points)
         
-        # Evaluate the expression for each w value
-        results = []
-        for w_val in w_vals:
-            try:
-                # Create namespace with w and common functions
-                namespace = {
-                    'w': w_val,
-                    'exp': np.exp,
-                    'sin': np.sin,
-                    'cos': np.cos,
-                    'tan': np.tan,
-                    'pi': np.pi,
-                    'sqrt': np.sqrt,
-                    'abs': np.abs,
-                    'log': np.log,
-                    'log10': np.log10,
-                    'e': np.e,
-                    'sinc': np.sinc, # Note: np.sinc(x) is sin(pi*x)/(pi*x)
-                    'sinh': np.sinh,
-                    'cosh': np.cosh,
-                    'tanh': np.tanh,
-                    'asin': np.arcsin,
-                    'acos': np.arccos,
-                    'atan': np.arctan,
-                    'sign': np.sign,
-                    'Heaviside': lambda x: np.where(x >= 0, 1.0, 0.0),
-                    'u': lambda x: np.where(x >= 0, 1.0, 0.0),
-                    'rect': lambda x: np.where(np.abs(x) <= 0.5, 1.0, 0.0),
-                    'tri': lambda x: np.maximum(0, 1 - np.abs(x))
-                }
-                
-                # Evaluate the expression
-                result = eval(clean_expr, {"__builtins__": {}}, namespace)
-                results.append(complex(result))
-            except Exception as e:
-                # If evaluation fails, use 0
-                results.append(0+0j)
-        
-        # Convert to numpy array
-        vals = np.array(results, dtype=complex)
-        
-        # Extract magnitude and phase
+        try:
+            with np.errstate(divide='ignore', invalid='ignore'):
+                vals = f_num(w_vals)
+                if np.isscalar(vals):
+                    vals = np.full_like(w_vals, vals, dtype=complex)
+                vals = np.array(vals, dtype=complex)
+                vals = np.nan_to_num(vals)
+        except:
+            vals = np.array([complex(expr.subs(var, v).evalf()) for v in w_vals])
+
         mag = np.abs(vals)
         phase = np.angle(vals)
-        
-        print(f"[evaluate_frequency_response] Evaluated {len(vals)} points")
-        print(f"[evaluate_frequency_response] Sample mag values: {mag[:5]}")
         
         return {
             "magnitude": {"x": w_vals.tolist(), "y": mag.tolist()},
@@ -306,14 +325,8 @@ def evaluate_frequency_response(expr_str: str, w_min: float = -10, w_max: float 
         }
         
     except Exception as e:
-        print(f"[evaluate_frequency_response] ERROR: {e}")
-        import traceback
-        traceback.print_exc()
-        # Return empty arrays instead of None
-        return {
-            "magnitude": {"x": [], "y": []},
-            "phase": {"x": [], "y": []}
-        }
+        print(f"[evaluate_frequency_response] Error: {e}")
+        return {"magnitude": {"x": [], "y": []}, "phase": {"x": [], "y": []}}
 
 def generate_plot_data(expr_str: str, t_min: float = -10, t_max: float = 10, num_points: int = 1000, domain: str = 'continuous'):
     """
@@ -330,40 +343,13 @@ def generate_plot_data(expr_str: str, t_min: float = -10, t_max: float = 10, num
     
     expr = parse_signal(expr_str, domain)
     
-    # Visual Proxy for DiracDelta
-    # Replace DiracDelta(arg) with a finite value for plotting
-    # We substitute DiracDelta with a custom function 'VisualDirac'
-    # which returns 1.0 (or high value) when arg is close to 0, else 0.
-    
-    # Define symbolic wrapper first
+    # Visual Proxy for DiracDelta: Replace with VisualDirac for plotting
     from sympy import Function
     VisualDirac = Function('VisualDirac')
-    
-    # Replace DiracDelta with VisualDirac in the expression
-    # This handles DiracDelta(t), DiracDelta(t-2), 3*DiracDelta(t) etc.
     expr_visual = expr.replace(DiracDelta, VisualDirac)
     
-    # Define numerical implementation for lambdify
-    def visual_dirac_impl(val):
-        # Return 1.0 if close to 0 (approximate visual impulse)
-        # For discrete, we want exactly 1 at 0
-        # For continuous, we want a spike.
-        # Tolerance needs to be > step size (12/1000 = 0.012)
-        tolerance = 0.05 if domain == 'continuous' else 0.1
-        return np.where(np.abs(val) < tolerance, 1.0, 0.0)
-
-    modules_dict = [
-        {
-            'VisualDirac': visual_dirac_impl,
-            'Heaviside': lambda x, h0=1.0: np.where(x >= 0, 1.0, 0.0),
-            'Max': np.maximum,
-            'Min': np.minimum,
-            'rect': lambda x: np.where(np.abs(x) <= 0.5, 1.0, 0.0),
-            'tri': lambda x: np.maximum(0, 1 - np.abs(x)),
-            'sinc': np.sinc # numpy sinc is sin(pi*x)/(pi*x)
-        }, 
-        'numpy'
-    ]
+    # Use shared modules dict
+    modules_dict = get_shared_modules_dict(domain)
 
     if domain == 'continuous':
         # Create lambda function
@@ -399,17 +385,19 @@ def compute_laplace(expr_str: str):
     # laplace_transform returns (F, a, cond)
     try:
         F, a, cond = laplace_transform(expr, t, s, noconds=False)
-        return str(F).replace('**', '^').replace('I', 'j') # simplified processing
+        return latex(F)
     except Exception as e:
         return f"Could not compute Laplace Transform: {str(e)}"
 
 def compute_fourier(expr_str: str):
     expr = parse_signal(expr_str, 'continuous')
+    from sympy import latex
     try:
-        # SymPy fourier_transform definition might differ from engineering standard (2pi factors)
-        # Using standard variable 'w' (omega)
-        F = fourier_transform(expr, t, w)
-        return str(F).replace('**', '^').replace('I', 'j')
+        # Engineering standard: X(jw) = int x(t)e^(-jwt) dt
+        # SymPy fourier_transform(f, t, w) uses e^(-2pi*i*w*t)
+        # So we use w/(2*pi) for the frequency parameter
+        F = fourier_transform(expr, t, w / (2 * pi))
+        return latex(F)
     except Exception as e:
         return f"Could not compute Fourier Transform: {str(e)}"
 
@@ -424,9 +412,10 @@ def compute_inverse_laplace(expr_str: str):
         # We also need to ensure user uses 's'.
         expr = parse_signal(expr_str, 'continuous') # reuse parse logic, it has 's'
         
+        from sympy import latex
         # inverse_laplace_transform(F, s, t)
         f = inverse_laplace_transform(expr, s, t)
-        return str(f).replace('**', '^').replace('Heaviside', 'u').replace('DiracDelta', 'd').replace('I', 'j')
+        return latex(f).replace('\\theta', 'u')
     except Exception as e:
         return f"Inverse Laplace Failed: {str(e)}"
 
@@ -476,7 +465,7 @@ def compute_spectrum(expr_str: str, w_min: float = -10, w_max: float = 10, num_p
                     w_vals = np.linspace(w_min, w_max, num_points)
                     X_values = np.zeros(len(w_vals), dtype=complex)
                     
-                    n_range = np.arange(-50, 51)  # Practical range for summation
+                    n_range = np.arange(-200, 201)  # Larger range for better frequency resolution
                     
                     for i, omega in enumerate(w_vals):
                         x_vals = x_n_func(n_range)
@@ -549,12 +538,18 @@ def compute_fourier_series_coeffs(expr_str: str, period_T: float = 6.28, num_coe
         coeffs = []
         indices = range(-num_coeffs, num_coeffs + 1)
         
-        for k in indices:
+        for k_i in indices:
             # This is an approximation/truncation extraction method
             w0 = 2*pi/period_T
-            term = expr * exp(-I * k * w0 * t)
+            term = expr * exp(-I * k_i * w0 * t)
             ak = (1/period_T) * integrate(term, (t, -load, load))
-            coeffs.append({"k": k, "value": abs(complex(ak))}) 
+            ak_num = complex(ak.evalf())
+            coeffs.append({
+                "k": k_i, 
+                "magnitude": abs(ak_num),
+                "phase": float(arg(ak_num)),
+                "value_str": str(ak).replace('**', '^').replace('I', 'j')
+            }) 
             
         return coeffs
     except Exception as e:
@@ -563,63 +558,9 @@ def compute_fourier_series_coeffs(expr_str: str, period_T: float = 6.28, num_coe
 
 def parse_transfer_function(expr_str: str, variable: str = 's'):
     """
-    Parse a transfer function H(s) or H(z) and extract poles and zeros.
-    Input: expression like "(s+1)/(s^2 + 2*s + 1)" or "(z-0.5)/(z^2 - 1.5*z + 0.5)"
-    Returns: {"poles": [{"r": real, "i": imag}, ...], "zeros": [...]}
+    Consolidated transfer function parser. Returns poles/zeros.
     """
-    from sympy import solve, fraction, simplify
-    
-    try:
-        # Replace j/J/i with I for imaginary unit
-        import re
-        clean_expr = re.sub(r'(?<![a-zA-Z])j(?![a-zA-Z])', 'I', expr_str)
-        clean_expr = re.sub(r'(?<![a-zA-Z])J(?![a-zA-Z])', 'I', clean_expr)
-        clean_expr = re.sub(r'(?<![a-zA-Z])i(?![a-zA-Z])', 'I', clean_expr)
-        
-        # Replace ^ with ** for exponentiation
-        clean_expr = clean_expr.replace('^', '**')
-        
-        # Parse the expression
-        var = symbols(variable)
-        local_dict = {'s': s, 'z': z, 'I': I, 'exp': exp, 'sin': sin, 'cos': cos, 'pi': pi}
-        
-        expr = parse_expr(clean_expr, local_dict=local_dict)
-        expr = simplify(expr)
-        
-        # Extract numerator and denominator
-        numer, denom = fraction(expr)
-        
-        # Find zeros (roots of numerator)
-        zero_roots = solve(numer, var)
-        zeros = []
-        for root in zero_roots:
-            try:
-                root_complex = complex(root)
-                zeros.append({"r": float(root_complex.real), "i": float(root_complex.imag)})
-            except:
-                # Skip non-numeric roots
-                pass
-        
-        # Find poles (roots of denominator)
-        pole_roots = solve(denom, var)
-        poles = []
-        for root in pole_roots:
-            try:
-                root_complex = complex(root)
-                poles.append({"r": float(root_complex.real), "i": float(root_complex.imag)})
-            except:
-                # Skip non-numeric roots
-                pass
-        
-        return {
-            "poles": poles,
-            "zeros": zeros,
-            "numerator": str(numer),
-            "denominator": str(denom)
-        }
-    except Exception as e:
-        print(f"Transfer function parsing failed: {e}")
-        return {"error": str(e), "poles": [], "zeros": []}
+    return extract_poles_zeros(expr_str, variable)
 
 # --- Convolution Logic (Ported from convolution.py) ---
 
@@ -647,17 +588,39 @@ def estimate_support_discrete(fn, lo=-20, hi=20):
 
 def compute_convolution(x_str: str, h_str: str, domain: str = 'continuous'):
     """
-    Computes convolution y(t) = x(t) * h(t) [or y[n] = x[n]*h[n]] and generates animation frames.
+    Computes convolution y(t) = x(t) * h(t) [or y[n] * h[n]] and generates animation frames.
+    Handles distributions like DiracDelta and KroneckerDelta via visual proxies.
     """
     try:
-        expr_dom = domain 
+        # Define visual modules (same as generate_plot_data)
+        class VisualDirac:
+            def __init__(self): pass
+            @staticmethod
+            def __call__(x): return np.where(np.abs(x) < 0.05, 10.0, 0.0)
         
+        modules_dict = [
+            'numpy',
+            {'Heaviside': lambda x: np.where(x >= 0, 1.0, 0.0),
+             'DiracDelta': VisualDirac(),
+             'VisualDirac': VisualDirac(),
+             'KroneckerDelta': lambda x, y: np.where(np.abs(x-y) < 0.1, 1.0, 0.0),
+             'rect': lambda x: np.where(np.abs(x) <= 0.5, 1.0, 0.0),
+             'tri': lambda x: np.maximum(0, 1 - np.abs(x)),
+             'sinc': np.sinc,
+             'Max': np.maximum,
+             'Min': np.minimum}
+        ]
+
         if domain == 'continuous':
             x_expr = parse_signal(x_str, 'continuous')
             h_expr = parse_signal(h_str, 'continuous')
             
-            x_fn = lambdify(t, x_expr, modules=['numpy'])
-            h_fn = lambdify(t, h_expr, modules=['numpy'])
+            # Use visual proxies for evaluating distributions
+            x_vis = x_expr.replace(DiracDelta, VisualDirac())
+            h_vis = h_expr.replace(DiracDelta, VisualDirac())
+            
+            x_fn = lambdify(t, x_vis, modules=modules_dict)
+            h_fn = lambdify(t, h_vis, modules=modules_dict)
             
             # Auto-range
             sx = estimate_support(x_fn)
@@ -666,38 +629,42 @@ def compute_convolution(x_str: str, h_str: str, domain: str = 'continuous'):
             ax, bx = sx if sx else (-2, 2)
             ah, bh = sh if sh else (-2, 2)
             
-            # Padded ranges
             tau_min, tau_max = min(ax, ah) - 2, max(bx, bh) + 2
             t_min, t_max = (ax + ah) - 2, (bx + bh) + 2
             
-            # Grids
-            num_frames = 60 # Limit for performance
-            num_tau = 200
+            num_frames = 60
+            num_tau = 400 # More points for smoother integration
             
             t_vals = np.linspace(t_min, t_max, num_frames)
             tau_vals = np.linspace(tau_min, tau_max, num_tau)
             
-            # Precompute X(tau)
-            X_tau = x_fn(tau_vals)
+            try:
+                X_tau = x_fn(tau_vals)
+            except:
+                X_tau = np.array([float(x_fn(v)) for v in tau_vals])
             if np.isscalar(X_tau): X_tau = np.full_like(tau_vals, X_tau)
             
-            # Compute Y(t) and Frames
             y_vals = []
             frames = []
             
             for ti in t_vals:
-                # h(t - tau)
-                H_shifted = h_fn(ti - tau_vals)
+                try:
+                    H_shifted = h_fn(ti - tau_vals)
+                except:
+                    H_shifted = np.array([float(h_fn(ti - v)) for v in tau_vals])
                 if np.isscalar(H_shifted): H_shifted = np.full_like(tau_vals, H_shifted)
                 
-                # Conv value at ti
-                val = np.trapz(X_tau * H_shifted, tau_vals)
+                # Numerical integration (trapz)
+                product = X_tau * H_shifted
+                val = np.trapz(product, tau_vals)
                 y_vals.append(val)
                 
                 frames.append({
                     "t": float(ti),
-                    "h_shifted": np.real(H_shifted).tolist(), 
-                    "current_y": float(val)
+                    "h_shifted": H_shifted.tolist(), 
+                    "current_y_real": float(np.real(val)),
+                    "current_y_imag": float(np.imag(val)),
+                    "current_y": float(np.real(val)) # for compat
                 })
                 
             return {
@@ -712,42 +679,46 @@ def compute_convolution(x_str: str, h_str: str, domain: str = 'continuous'):
             x_expr = parse_signal(x_str, 'discrete')
             h_expr = parse_signal(h_str, 'discrete')
             
-            x_fn = lambdify(n, x_expr, modules=['numpy'])
-            h_fn = lambdify(n, h_expr, modules=['numpy'])
+            x_fn = lambdify(n, x_expr, modules=modules_dict)
+            h_fn = lambdify(n, h_expr, modules=modules_dict)
 
-            # Auto-range
             sx = estimate_support_discrete(x_fn)
             sh = estimate_support_discrete(h_fn)
 
             ax, bx = sx if sx else (-5, 5)
             ah, bh = sh if sh else (-5, 5)
             
-            # Logic: Convolution support [ax+ah, bx+bh]
-            k_min, k_max = min(ax, ah) - 5, max(bx, bh) + 5 # k is integration var usually k or m
+            k_min, k_max = min(ax, ah) - 5, max(bx, bh) + 5
             n_min, n_max = (ax + ah) - 5, (bx + bh) + 5
             
             n_vals = np.arange(n_min, n_max + 1)
             k_vals = np.arange(k_min, k_max + 1)
             
-            X_k = x_fn(k_vals)
+            try:
+                X_k = x_fn(k_vals)
+            except:
+                X_k = np.array([float(x_fn(v)) for v in k_vals])
             if np.isscalar(X_k): X_k = np.full_like(k_vals, X_k)
             
             y_vals = []
             frames = []
             
             for ni in n_vals:
-                # h[n - k]
-                H_shifted = h_fn(ni - k_vals)
+                try:
+                    H_shifted = h_fn(ni - k_vals)
+                except:
+                    H_shifted = np.array([float(h_fn(ni - v)) for v in k_vals])
                 if np.isscalar(H_shifted): H_shifted = np.full_like(k_vals, H_shifted)
                 
-                # Sum product
                 val = np.sum(X_k * H_shifted)
                 y_vals.append(val)
                 
                 frames.append({
                     "t": float(ni), # use 't' key for generic frontend compat
-                    "h_shifted": np.real(H_shifted).tolist(), 
-                    "current_y": float(val)
+                    "h_shifted": H_shifted.tolist(), 
+                    "current_y_real": float(np.real(val)),
+                    "current_y_imag": float(np.imag(val)),
+                    "current_y": float(np.real(val))
                 })
                 
             return {
@@ -760,11 +731,11 @@ def compute_convolution(x_str: str, h_str: str, domain: str = 'continuous'):
 
     except Exception as e:
         print(f"Convolution Failed: {e}")
+        import traceback
+        traceback.print_exc()
         return None
 
-# TODO: Add Z-Transform logic (SymPy doesn't have a direct z_transform function in older versions, 
-# might need manual summation or summation wrapper)
-    return "Z-Transform Logic Placeholder"
+
 
 def extract_poles_zeros(expr_str: str, variable: str):
     """
@@ -775,9 +746,13 @@ def extract_poles_zeros(expr_str: str, variable: str):
     """
     try:
         var_sym = symbols(variable)
-        # Parse expression, robustly handling ^ for power
-        valid_expr = expr_str.replace('^', '**')
-        expr = parse_expr(valid_expr, transformations=standard_transformations + (implicit_multiplication_application,))
+        expr = parse_signal(expr_str, 'continuous') # reuse engineering parser
+        if variable == 'z':
+            # ensure z is the variable if we parsed with t/n
+            expr = expr.subs(n, var_sym).subs(t, var_sym)
+        elif variable == 's':
+             expr = expr.subs(t, var_sym)
+
         
         # Simplify to rational form P/Q
         rational_expr = expr.simplify()

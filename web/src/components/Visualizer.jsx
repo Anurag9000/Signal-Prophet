@@ -23,23 +23,31 @@ const Visualizer = ({ xData, yData, title, xLabel, yLabel, plotType = 'line', co
 
         let data = [];
         if (plotType === 'stem') {
+            // Optimized Stem Plot: Single trace for all stems using null-gap technique
+            const stemX = [];
+            const stemY = [];
+            for (let i = 0; i < len; i++) {
+                stemX.push(safeX[i], safeX[i], null);
+                stemY.push(0, safeY[i], null);
+            }
+
             data = [
-                // Stems (vertical lines)
-                ...safeX.map((x, i) => ({
-                    x: [x, x],
-                    y: [0, safeY[i]],
+                // Stems
+                {
+                    x: stemX,
+                    y: stemY,
                     mode: 'lines',
-                    line: { color: color, width: 2 },
+                    line: { color: color, width: 1.5 },
                     type: 'scatter',
-                    showlegend: false,
-                    hoverinfo: 'none'
-                })),
-                // Markers (tops)
+                    hoverinfo: 'none',
+                    showlegend: false
+                },
+                // Markers
                 {
                     x: safeX,
                     y: safeY,
                     mode: 'markers',
-                    marker: { color: color, size: 8 },
+                    marker: { color: color, size: 6 },
                     type: 'scatter',
                     name: title
                 }

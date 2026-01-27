@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { BlockMath } from 'react-katex';
 import axios from 'axios';
 import Plot from 'react-plotly.js';
 import { Play, Pause, Loader2, RefreshCw } from 'lucide-react';
@@ -85,7 +86,7 @@ const ConvolutionLab = () => {
             {
                 x: data.tau,
                 y: currentFrame ? currentFrame.h_shifted : [],
-                name: `h(${currentFrame?.t.toFixed(domain === 'discrete' ? 0 : 2)} - ${tauLabel})`,
+                name: `h(${currentFrame ? currentFrame.t.toFixed(domain === 'discrete' ? 0 : 2) : '?'} - ${tauLabel})`,
                 type: 'scatter',
                 mode: domain === 'discrete' ? 'markers' : 'lines',
                 line: { color: '#ef4444', width: 2, dash: 'dot' },
@@ -94,7 +95,7 @@ const ConvolutionLab = () => {
             // Product fill (visual aid)
             {
                 x: data.tau,
-                y: currentFrame ? data.x_tau.map((x, i) => x * currentFrame.h_shifted[i]) : [],
+                y: currentFrame ? data.x_tau.map((x, i) => x * (currentFrame.h_shifted[i] || 0)) : [],
                 name: 'Product',
                 type: 'scatter',
                 mode: domain === 'discrete' ? 'markers' : 'none',
@@ -204,13 +205,11 @@ const ConvolutionLab = () => {
                         </button>
                     </div>
 
-                    <div className="mt-6 pt-4 border-t border-slate-100">
-                        <p className="text-xs text-slate-400">
-                            {domain === 'continuous'
-                                ? "Computes $y(t) = \\int x(\\tau)h(t-\\tau)d\\tau$."
-                                : "Computes $y[n] = \\sum_{k=-\\infty}^{\\infty} x[k]h[n-k]$."
-                            }
-                        </p>
+                    <div className="mt-6 pt-4 border-t border-slate-100 italic text-slate-500">
+                        {domain === 'continuous'
+                            ? <BlockMath math="y(t) = \int_{-\infty}^{\infty} x(\tau)h(t-\tau)d\tau" />
+                            : <BlockMath math="y[n] = \sum_{k=-\infty}^{\infty} x[k]h[n-k]" />
+                        }
                     </div>
                 </div>
             </div>
@@ -244,7 +243,7 @@ const ConvolutionLab = () => {
                                 onChange={(e) => { setIsPlaying(false); setFrameIdx(parseInt(e.target.value)); }}
                                 className="flex-1"
                             />
-                            <span className="text-xs font-mono w-20 text-right">{tLabel} = {currentFrame?.t.toFixed(domain === 'discrete' ? 0 : 2)}</span>
+                            <span className="text-xs font-mono w-20 text-right">{tLabel} = {currentFrame ? currentFrame.t.toFixed(domain === 'discrete' ? 0 : 2) : '?'}</span>
                         </div>
 
                         {/* Plots */}

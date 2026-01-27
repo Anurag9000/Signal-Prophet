@@ -10,6 +10,7 @@ import {
 import { Scatter } from 'react-chartjs-2';
 import clsx from 'clsx';
 
+import axios from 'axios';
 import Plot from 'react-plotly.js';
 import { API_URL } from '../config';
 
@@ -33,9 +34,9 @@ const ROCExplorer = () => {
             setPoles([{ r: -1, i: 0 }, { r: -1, i: 0 }]);
             setZeros([{ r: -1, i: 0 }]);
         } else {
-            setTransferFunction('(z+1)/(z^2+2*z+1)');
-            setPoles([{ r: -1, i: 0 }, { r: -1, i: 0 }]);
-            setZeros([{ r: -1, i: 0 }]);
+            setTransferFunction('z/(z-0.8)');
+            setPoles([{ r: 0.8, i: 0 }]);
+            setZeros([{ r: 0, i: 0 }]);
         }
         setUpdateKey(prev => prev + 1);
     }, [domain]);
@@ -51,19 +52,17 @@ const ROCExplorer = () => {
     const [tfLoading, setTfLoading] = useState(false);
 
     // Handle transfer function parsing
-    // Handle transfer function parsing
     const handleParseTF = async () => {
         if (!transferFunction.trim()) return;
 
         setTfLoading(true);
         try {
             const variable = domain === 'laplace' ? 's' : 'z';
-            const res = await fetch(`${API_URL}/parse_transfer_function`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ expression: transferFunction, variable })
+            const res = await axios.post(`${API_URL}/parse_transfer_function`, {
+                expression: transferFunction,
+                variable: variable
             });
-            const data = await res.json();
+            const data = res.data;
 
             if (data.error) {
                 alert(`Error: ${data.error}`);
@@ -73,7 +72,7 @@ const ROCExplorer = () => {
                 setUpdateKey(prev => prev + 1);
             }
         } catch (e) {
-            alert(`Failed to parse: ${e.message}`);
+            alert(`Failed to parse: ${e.response?.data?.detail || e.message}`);
         } finally {
             setTfLoading(false);
         }
@@ -110,33 +109,21 @@ const ROCExplorer = () => {
 
                 if (causality === 'causal') {
                     html = `Causal System: ROC is Re(s) > ${maxReal.toFixed(2)}. `;
-                    // Stable if ROC includes jω axis (Re(s) = 0)
                     const actuallyStable = maxReal < 0;
-
-                    if (stability === 'stable' && !actuallyStable) {
-                        isValid = false;
-                        html = `❌ INVALID: Causal system with rightmost pole at Re(s) = ${maxReal.toFixed(2)} CANNOT be stable (ROC excludes jω axis).`;
-                    } else if (stability === 'unstable' && actuallyStable) {
-                        isValid = false;
-                        html = `❌ INVALID: Causal system with rightmost pole at Re(s) = ${maxReal.toFixed(2)} CANNOT be unstable (ROC includes jω axis).`;
-                    } else {
-                        isStable = actuallyStable;
-                        html += isStable ? "System is STABLE (ROC includes jω axis)." : "System is UNSTABLE (ROC excludes jω axis).";
-                    }
-                } else {
+                    isStable = actuallyStable;
+                    html += isStable ? "System is STABLE." : "System is UNSTABLE.";
+                } else if (causality === 'anticausal') {
                     html = `Anti-Causal System: ROC is Re(s) < ${minReal.toFixed(2)}. `;
                     const actuallyStable = minReal > 0;
-
-                    if (stability === 'stable' && !actuallyStable) {
-                        isValid = false;
-                        html = `❌ INVALID: Anti-causal system with leftmost pole at Re(s) = ${minReal.toFixed(2)} CANNOT be stable (ROC excludes jω axis).`;
-                    } else if (stability === 'unstable' && actuallyStable) {
-                        isValid = false;
-                        html = `❌ INVALID: Anti-causal system with leftmost pole at Re(s) = ${minReal.toFixed(2)} CANNOT be unstable (ROC includes jω axis).`;
-                    } else {
-                        isStable = actuallyStable;
-                        html += isStable ? "System is STABLE (ROC includes jω axis)." : "System is UNSTABLE (ROC excludes jω axis).";
-                    }
+                    isStable = actuallyStable;
+                    html += isStable ? "System is STABLE." : "System is UNSTABLE.";
+                } else {
+                    // Stable ROC (Strip)
+                    const leftPole = Math.max(...realParts.filter(r => r < 0), -Infinity);
+                    const rightPole = Math.min(...realParts.filter(r => r > 0), Infinity);
+                    isStable = leftPole < 0 && rightPole > 0;
+                    html = `Stable ROC: ${leftPole.toFixed(2)} < Re(s) < ${rightPole.toFixed(2)}. `;
+                    html += "Includes jω axis.";
                 }
             } else {
                 // Z Logic
@@ -147,31 +134,20 @@ const ROCExplorer = () => {
                 if (causality === 'causal') {
                     html = `Causal System: ROC is |z| > ${maxMag.toFixed(2)}. `;
                     const actuallyStable = maxMag < 1;
-
-                    if (stability === 'stable' && !actuallyStable) {
-                        isValid = false;
-                        html = `❌ INVALID: Causal system with outermost pole at |z| = ${maxMag.toFixed(2)} CANNOT be stable (ROC excludes unit circle).`;
-                    } else if (stability === 'unstable' && actuallyStable) {
-                        isValid = false;
-                        html = `❌ INVALID: Causal system with outermost pole at |z| = ${maxMag.toFixed(2)} CANNOT be unstable (ROC includes unit circle).`;
-                    } else {
-                        isStable = actuallyStable;
-                        html += isStable ? "System is STABLE (ROC includes unit circle)." : "System is UNSTABLE (ROC excludes unit circle).";
-                    }
-                } else {
+                    isStable = actuallyStable;
+                    html += isStable ? "System is STABLE." : "System is UNSTABLE.";
+                } else if (causality === 'anticausal') {
                     html = `Anti-Causal System: ROC is |z| < ${minMag.toFixed(2)}. `;
                     const actuallyStable = minMag > 1;
-
-                    if (stability === 'stable' && !actuallyStable) {
-                        isValid = false;
-                        html = `❌ INVALID: Anti-causal system with innermost pole at |z| = ${minMag.toFixed(2)} CANNOT be stable (ROC excludes unit circle).`;
-                    } else if (stability === 'unstable' && actuallyStable) {
-                        isValid = false;
-                        html = `❌ INVALID: Anti-causal system with innermost pole at |z| = ${minMag.toFixed(2)} CANNOT be unstable (ROC includes unit circle).`;
-                    } else {
-                        isStable = actuallyStable;
-                        html += isStable ? "System is STABLE (ROC includes unit circle)." : "System is UNSTABLE (ROC excludes unit circle).";
-                    }
+                    isStable = actuallyStable;
+                    html += isStable ? "System is STABLE." : "System is UNSTABLE.";
+                } else {
+                    // Stable ROC (Ring)
+                    const innerPole = Math.max(...mags.filter(m => m < 1), 0);
+                    const outerPole = Math.min(...mags.filter(m => m > 1), Infinity);
+                    isStable = innerPole < 1 && outerPole > 1;
+                    html = `Stable ROC: ${innerPole.toFixed(2)} < |z| < ${outerPole.toFixed(2)}. `;
+                    html += "Includes unit circle.";
                 }
             }
         }
@@ -185,28 +161,22 @@ const ROCExplorer = () => {
                 setLoading3d(true);
                 setError3d(null);
                 try {
-                    const res = await fetch(`${API_URL}/roc/surface`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            poles,
-                            zeros,
-                            gain: 1.0,
-                            domain,
-                            roc_type: causality,
-                            plot_range: plotRange
-                        })
+                    const res = await axios.post(`${API_URL}/roc/surface`, {
+                        poles,
+                        zeros,
+                        gain: 1.0,
+                        domain,
+                        roc_type: causality,
+                        plot_range: plotRange
                     });
 
-                    if (!res.ok) throw new Error(`Backend Error: ${res.statusText}`);
-
-                    const data = await res.json();
+                    const data = res.data;
                     if (!data.z || !data.x || !data.y) throw new Error("Invalid 3D Data Structure");
 
                     setSurfaceData(data);
                 } catch (e) {
                     console.error("Failed to load 3D surface", e);
-                    setError3d(e.message);
+                    setError3d(e.response?.data?.detail || e.message);
                 }
                 setLoading3d(false);
             };
@@ -283,10 +253,17 @@ const ROCExplorer = () => {
                     const startX = xAxis.getPixelForValue(maxReal);
                     const endX = xAxis.getPixelForValue(xAxis.max);
                     ctx.fillRect(startX, topY, endX - startX, bottomY - topY);
-                } else {
+                } else if (causality === 'anticausal') {
                     // ROC: Left of leftmost pole
                     const startX = xAxis.getPixelForValue(xAxis.min);
                     const endX = xAxis.getPixelForValue(minReal);
+                    ctx.fillRect(startX, topY, endX - startX, bottomY - topY);
+                } else {
+                    // ROC: Strip containing jw axis
+                    const leftBound = Math.max(...realParts.filter(r => r < 0), xAxis.min);
+                    const rightBound = Math.min(...realParts.filter(r => r > 0), xAxis.max);
+                    const startX = xAxis.getPixelForValue(leftBound);
+                    const endX = xAxis.getPixelForValue(rightBound);
                     ctx.fillRect(startX, topY, endX - startX, bottomY - topY);
                 }
             } else {
@@ -306,9 +283,16 @@ const ROCExplorer = () => {
                     ctx.arc(center.x, center.y, 3000, 0, 2 * Math.PI);
                     ctx.arc(center.x, center.y, maxMag * pxUnit, 0, 2 * Math.PI, true);
                     ctx.fill();
-                } else {
+                } else if (causality === 'anticausal') {
                     // ROC: Inside innermost pole
                     ctx.arc(center.x, center.y, minMag * pxUnit, 0, 2 * Math.PI);
+                    ctx.fill();
+                } else {
+                    // ROC: Ring containing unit circle
+                    const innerBound = Math.max(...mags.filter(m => m < 1), 0);
+                    const outerBound = Math.min(...mags.filter(m => m > 1), 100);
+                    ctx.arc(center.x, center.y, outerBound * pxUnit, 0, 2 * Math.PI);
+                    ctx.arc(center.x, center.y, innerBound * pxUnit, 0, 2 * Math.PI, true);
                     ctx.fill();
                 }
             }
@@ -505,22 +489,24 @@ const ROCExplorer = () => {
 
                     <hr className="border-slate-200 my-4" />
 
-                    {/* Causality */}
+                    {/* ROC Type Selector (Merged Causality/Stability for clear 3D masking) */}
                     <div className="mb-4">
-                        <label className="block text-xs font-semibold text-slate-500 mb-2 uppercase">Causality</label>
-                        <div className="flex shadow-sm rounded-md">
-                            <button onClick={() => setCausality('causal')} className={clsx("flex-1 py-2 text-xs border rounded-l-md", causality === 'causal' ? "bg-white border-blue-500 text-blue-700 ring-1 ring-blue-500" : "bg-white border-slate-300 text-slate-600 hover:bg-slate-50")}>Causal</button>
-                            <button onClick={() => setCausality('anticausal')} className={clsx("flex-1 py-2 text-xs border border-l-0 rounded-r-md", causality === 'anticausal' ? "bg-white border-blue-500 text-blue-700 ring-1 ring-blue-500" : "bg-white border-slate-300 text-slate-600 hover:bg-slate-50")}>Anti-Causal</button>
+                        <label className="block text-xs font-semibold text-slate-500 mb-2 uppercase">ROC Configuration (Masking)</label>
+                        <div className="grid grid-cols-3 gap-1 bg-slate-100 p-1 rounded-md">
+                            <button
+                                onClick={() => setCausality('causal')}
+                                className={clsx("py-1.5 text-[10px] font-bold rounded transition", causality === 'causal' ? "bg-white text-blue-700 shadow-sm" : "text-slate-500 hover:text-slate-700")}
+                            >Causal</button>
+                            <button
+                                onClick={() => setCausality('anticausal')}
+                                className={clsx("py-1.5 text-[10px] font-bold rounded transition", causality === 'anticausal' ? "bg-white text-emerald-700 shadow-sm" : "text-slate-500 hover:text-slate-700")}
+                            >Anticausal</button>
+                            <button
+                                onClick={() => setCausality('stable')}
+                                className={clsx("py-1.5 text-[10px] font-bold rounded transition", causality === 'stable' ? "bg-white text-indigo-700 shadow-sm" : "text-slate-500 hover:text-slate-700")}
+                            >Stable</button>
                         </div>
-                    </div>
-
-                    {/* Stability */}
-                    <div className="mb-4">
-                        <label className="block text-xs font-semibold text-slate-500 mb-2 uppercase">Stability</label>
-                        <div className="flex shadow-sm rounded-md">
-                            <button onClick={() => setStability('stable')} className={clsx("flex-1 py-2 text-xs border rounded-l-md", stability === 'stable' ? "bg-white border-green-500 text-green-700 ring-1 ring-green-500" : "bg-white border-slate-300 text-slate-600 hover:bg-slate-50")}>Stable</button>
-                            <button onClick={() => setStability('unstable')} className={clsx("flex-1 py-2 text-xs border border-l-0 rounded-r-md", stability === 'unstable' ? "bg-white border-red-500 text-red-700 ring-1 ring-red-500" : "bg-white border-slate-300 text-slate-600 hover:bg-slate-50")}>Unstable</button>
-                        </div>
+                        <p className="text-[9px] text-slate-400 mt-1 italic">Determines the Region of Convergence (ROC) masking for 3D plots.</p>
                     </div>
 
                     {/* Add Pole */}
@@ -642,9 +628,17 @@ const ROCExplorer = () => {
                                     autosize: true,
                                     margin: { l: 0, r: 0, b: 0, t: 0 },
                                     scene: {
-                                        xaxis: { title: { text: domain === 'laplace' ? 'σ' : 'r' }, range: domain === 'laplace' ? [-plotRange, plotRange] : [0, plotRange] },
-                                        yaxis: { title: { text: domain === 'laplace' ? 'jω' : 'e^jω' }, range: domain === 'laplace' ? [-plotRange, plotRange] : [-Math.PI, Math.PI] },
-                                        zaxis: { title: { text: domain === 'laplace' ? '|X(s)|' : '|X(z)|' } },
+                                        xaxis: {
+                                            title: { text: domain === 'laplace' ? 'σ (Real s)' : 'Re(z)' },
+                                            range: [-plotRange, plotRange]
+                                        },
+                                        yaxis: {
+                                            title: { text: domain === 'laplace' ? 'jω (Imag s)' : 'Im(z)' },
+                                            range: [-plotRange, plotRange]
+                                        },
+                                        zaxis: {
+                                            title: { text: domain === 'laplace' ? '|H(s)|' : '|H(z)|' }
+                                        },
                                         aspectratio: { x: 1, y: 1, z: 0.7 }
                                     },
                                     annotations: (poles.length === 0 && zeros.length === 0) ? [{

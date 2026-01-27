@@ -13,30 +13,35 @@ def detect_period_ct(signal_eq: str):
     Returns: (period: float|None, message: str)
     """
     try:
-        # Parse the signal
         from api.core.symbolic import parse_signal
         expr = parse_signal(signal_eq, 'continuous')
         
-        # Use SymPy's periodicity function
         # periodicity(expr, symbol) returns the fundamental period or None
         period_sym = periodicity(expr, t)
         
         if period_sym is None:
             return None, "Signal appears to be aperiodic"
         
-        # Evaluate to float
+        # Only evaluate if it's a pure number (possibly with pi, etc.)
+        # SymPy periodicity often returns symbolic expressions.
+        if not period_sym.is_number:
+             # Try to simplify/evalf and see if it becomes a number
+             # This handles 2*pi/1 etc.
+             period_sym = period_sym.simplify()
+             if not period_sym.is_number:
+                  return None, f"Detected symbolic period {period_sym} cannot be evaluated to a constant"
+
         period_val = float(period_sym.evalf())
         
-        # Sanity check
-        if period_val <= 0 or period_val > 1000:
-            return None, f"Detected period {period_val} seems unreasonable"
+        if period_val <= 0 or period_val > 5000:
+            return None, f"Detected period {period_val} seems excessive or non-positive"
         
         return period_val, f"Detected period T = {period_val:.4f}"
         
     except Exception as e:
         return None, f"Period detection failed: {str(e)}"
 
-def detect_period_dt(signal_eq: str, max_N=100):
+def detect_period_dt(signal_eq: str, max_period_search=100):
     """
     Detect period N for discrete-time signals.
     Returns: (period: int|None, message: str)
@@ -49,31 +54,33 @@ def detect_period_dt(signal_eq: str, max_N=100):
         expr = parse_signal(signal_eq, 'discrete')
         
         # Convert to numerical function
-        x_func = lambdify(n, expr, modules=['numpy'])
+        from api.core.utils import get_shared_modules_dict
+        m_dict = get_shared_modules_dict('discrete')
+        x_func = lambdify(n, expr, modules=m_dict)
         
-        # Test for periodicity by checking x[n] == x[n+N] for various N
-        # Sample the signal at n = 0 to 99
-        n_samples = np.arange(0, max_N)
-        x_vals = x_func(n_samples)
-        
-        # Handle scalar output
+        # Test for periodicity by checking x[n] == x[n+N]
+        # We need enough samples to verify several periods
+        sample_len = max_period_search * 3
+        n_samples = np.arange(0, sample_len)
+        try:
+            x_vals = x_func(n_samples)
+        except:
+             x_vals = np.array([complex(expr.subs(n, nv).evalf()) for nv in n_samples])
+             
         if np.isscalar(x_vals):
-            x_vals = np.full_like(n_samples, x_vals, dtype=float)
+            x_vals = np.full_like(n_samples, x_vals, dtype=complex)
         
-        # Try periods from 1 to max_N/2
-        for N_test in range(1, max_N // 2):
-            # Check if x[n] ≈ x[n + N_test] for all sampled n
-            is_periodic = True
+        # Try periods from 1 up to max_period_search
+        for N_test in range(1, max_period_search + 1):
+            # Check if x[n] ≈ x[n + N_test] for all available samples
+            # Use enough points to be confident (e.g. 50 points or remaining range)
+            check_len = min(50, len(x_vals) - N_test)
+            if check_len < 2: continue
             
-            for i in range(len(n_samples) - N_test):
-                if not np.isclose(x_vals[i], x_vals[i + N_test], atol=1e-6):
-                    is_periodic = False
-                    break
-            
-            if is_periodic:
+            if np.allclose(x_vals[:check_len], x_vals[N_test:N_test+check_len], atol=1e-5):
                 return N_test, f"Detected period N = {N_test}"
         
-        return None, "No period detected (signal may be aperiodic or period > 50)"
+        return None, f"No period detected (up to N={max_period_search})"
         
     except Exception as e:
         return None, f"Period detection failed: {str(e)}"
@@ -94,7 +101,7 @@ if __name__ == "__main__":
     print("\nContinuous-Time Tests:")
     for signal, expected in ct_tests:
         period, msg = detect_period_ct(signal)
-        status = "✓" if (period is None and expected is None) or (period and expected and abs(period - expected) < 0.01) else "✗"
+        status = "✓" if (period is None and expected is None) or (period and expected and abs(period - float(expected)) < 0.01) else "✗"
         print(f"{status} {signal}: {msg}")
     
     # DT tests

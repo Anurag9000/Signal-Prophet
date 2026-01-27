@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Activity, CheckCircle, XCircle, AlertCircle, Info } from 'lucide-react';
+import { BlockMath } from 'react-katex';
 import axios from 'axios';
 import Visualizer from './Visualizer';
 import { API_URL } from '../config';
@@ -163,17 +164,23 @@ const SystemAnalyzer = () => {
                     <div className="space-y-6">
                         {/* Properties Table */}
                         <div className="bg-white rounded-2xl shadow-lg border border-slate-200 overflow-hidden">
-                            <div className="bg-gradient-to-r from-indigo-600 to-blue-600 px-6 py-4 flex justify-between items-center">
-                                <h2 className="text-xl font-bold text-white">System Properties</h2>
-                                <div className="flex flex-col gap-2 items-end">
+                            <div className="bg-gradient-to-r from-indigo-600 to-blue-600 px-6 py-4">
+                                <h2 className="text-xl font-bold text-white mb-4">System Analysis Results</h2>
+                                <div className="flex flex-wrap gap-4">
                                     {properties.impulse_response && (
-                                        <div className="text-white/90 text-sm font-mono bg-white/10 px-3 py-1 rounded-lg border border-white/20">
-                                            h({domain === 'continuous' ? 't' : 'n'}) = {properties.impulse_response}
+                                        <div className="bg-white/10 p-4 rounded-xl border border-white/20 backdrop-blur-md flex-1 min-w-[200px]">
+                                            <p className="text-indigo-100 text-[10px] font-bold uppercase mb-2 tracking-widest">Impulse Response</p>
+                                            <div className="text-white text-lg overflow-x-auto">
+                                                <BlockMath math={`h(${domain === 'continuous' ? 't' : 'n'}) = ${properties.impulse_response}`} />
+                                            </div>
                                         </div>
                                     )}
                                     {outputEquation && (
-                                        <div className="text-white/90 text-sm font-mono bg-white/10 px-3 py-1 rounded-lg border border-white/20">
-                                            y({domain === 'continuous' ? 't' : 'n'}) = {outputEquation}
+                                        <div className="bg-white/10 p-4 rounded-xl border border-white/20 backdrop-blur-md flex-1 min-w-[200px]">
+                                            <p className="text-indigo-100 text-[10px] font-bold uppercase mb-2 tracking-widest">System Response</p>
+                                            <div className="text-white text-lg overflow-x-auto">
+                                                <BlockMath math={`y(${domain === 'continuous' ? 't' : 'n'}) = ${outputEquation}`} />
+                                            </div>
                                         </div>
                                     )}
                                 </div>

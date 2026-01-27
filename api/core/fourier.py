@@ -27,28 +27,28 @@ def calculate_ctfs(signal_eq: str, T: float, k_min: int = -5, k_max: int = 5):
         # We will calculate for specific k values for the spectrum plot.
         
         for k_val in range(k_min, k_max + 1):
-            # Term to integrate
-            if k_val == 0:
-                term = x_expr
-            else:
-                term = x_expr * exp(-I * k_val * w0 * t)
+            # Term to integrate: x(t) * exp(-j * k * w0 * t)
+            # exp(0) is 1, so no need for special k=0 check
+            term = x_expr * exp(-I * k_val * w0 * t)
             
             # Integrate over one period [0, T]
             # Note: User equation might be definedpiecewise or valid for all t.
             # Assuming periodic extension of the definition in [0, T] or standard function.
             
-            # Using simplify() can be slow but helps result readability
-            ak_sym = integrate(term, (t, 0, T)) / T
+            # Integrate over one period [-T/2, T/2] which is better for centered signals
+            ak_sym = integrate(term, (t, -T_sym/2, T_sym/2)) / T_sym
             ak_sym = simplify(ak_sym)
             
             # Evaluate to complex number for plotting
             ak_num = complex(ak_sym.evalf())
             
             coeffs.append({
-                "k": k_val,
+                "k": int(k_val),
                 "value_str": str(ak_sym).replace('**', '^').replace('I', 'j'),
                 "magnitude": float(abs(ak_num)),
-                "phase": float(arg(ak_num))
+                "phase": float(arg(ak_num)),
+                "real": float(ak_num.real),
+                "imag": float(ak_num.imag)
             })
             
         return coeffs
@@ -94,51 +94,81 @@ def calculate_inverse_ctfs(ak_eq: str, T: float, k_min: int = -5, k_max: int = 5
 def calculate_dtfs(signal_eq: str, N: int):
     """
     Calculates Discrete Time Fourier Series coefficients a_k.
-    a_k = (1/N) * sum(x[n] * exp(-j*k*(2pi/N)*n), n, 0, N-1)
+    Optimized with lambdify.
     """
     try:
         x_expr = parse_signal(signal_eq, 'discrete')
-        # Evaluate x[n] for n = 0 to N-1
-        x_vals = []
-        # We need a numerical lambda for efficiency
-        # Handle 'n' substitution
-        for n_val in range(N):
-            val = x_expr.subs(n, n_val).evalf()
-            if hasattr(val, 'is_complex') and val.is_complex:
-                 x_vals.append(complex(val))
-            else:
-                 x_vals.append(float(val))
+        # Numerical implementation for efficiency
+        from api.core.utils import get_shared_modules_dict
+        m_dict = get_shared_modules_dict('discrete')
+        x_fn = lambdify(n, x_expr, modules=m_dict)
+        
+        n_vals = np.arange(N)
+        try:
+            x_num = x_fn(n_vals)
+        except:
+            # Fallback for complex symbolic expressions
+            x_num = np.array([complex(x_expr.subs(n, nv).evalf()) for nv in n_vals])
+            
+        if np.isscalar(x_num): x_num = np.full_like(n_vals, x_num)
+                 
+        # a_k = (1/N) * sum_{n=0}^{N-1} x[n] exp(-j * k * (2pi/N) * n)
+        # This is exactly (1/N) * DFT(x[n])
+        ak_values = np.fft.fft(x_num) / N
                  
         coeffs = []
-        for k_val in range(N):
-            sum_val = 0
-            for n_val in range(N):
-                term = x_vals[n_val] * np.exp(-1j * k_val * (2 * np.pi / N) * n_val)
-                sum_val += term
-            
-            ak = sum_val / N
-            
+        for k_val, ak in enumerate(ak_values):
             coeffs.append({
-                "k": k_val,
-                "value_str": f"{ak:.3f}",
+                "k": int(k_val),
+                "value_str": f"{ak.real:.3f} + {ak.imag:.3f}j",
                 "magnitude": float(np.abs(ak)),
-                "phase": float(np.angle(ak))
+                "phase": float(np.angle(ak)),
+                "real": float(ak.real),
+                "imag": float(ak.imag)
             })
             
         return coeffs
-        
     except Exception as e:
         print(f"Error calculating DTFS: {e}")
         return []
 
-def calculate_inverse_dtfs(ak_list, N: int):
+def calculate_inverse_dtfs(ak_eq: str, N: int):
     """
-    Synthesizes x[n] from list of coefficients.
-    x[n] = sum(a_k * exp(j*k*(2pi/N)*n))
+    Synthesizes x[n] from coefficient formula a_k.
+    Optimized with lambdify.
     """
-    # Assuming ak_list is list of complex numbers or dicts
-    # Simplification: User provides just a formula for ak usually in this app context? 
-    # Or strict list? Let's assume formula for consistency with CTFS inverse for now, 
-    # or handle list input if passed. 
-    # For now implementation: Formula based inverse DTFS (common in textbooks)
-    return None # Placeholder, will implement if requested or reuse CTFS structure adapted
+    try:
+        local_dict = {'k': k, 'pi': pi, 'sin': sympify('sin'), 'sinc': sympify('sinc'), 'I': I, 'j': I}
+        transformations = (standard_transformations + (implicit_multiplication_application,))
+        ak_expr = parse_expr(ak_eq.replace('^', '**'), local_dict=local_dict, transformations=transformations)
+        
+        from api.core.utils import get_shared_modules_dict
+        m_dict = get_shared_modules_dict('discrete')
+        ak_fn = lambdify(k, ak_expr, modules=m_dict)
+        
+        k_vals = np.arange(N)
+        try:
+            ak_num = ak_fn(k_vals)
+        except:
+            ak_num = np.array([complex(ak_expr.subs(k, kv).evalf()) for kv in k_vals])
+            
+        if np.isscalar(ak_num): ak_num = np.full_like(k_vals, ak_num)
+        
+        # x[n] = sum_{k=0}^{N-1} a_k exp(j * n * (2pi/N) * k)
+        # This is N * IDFT(a_k)
+        # Note: np.fft.ifft(A) computes (1/N) * sum(A * exp(j * 2pi/N * n * k))
+        # So sum(A * exp(...)) = N * ifft(A)
+        xn_values = np.fft.ifft(ak_num) * N
+        
+        x_values = []
+        for n_val, x_comp in enumerate(xn_values):
+            x_values.append({
+                "n": int(n_val),
+                "value": float(np.real(x_comp)),
+                "imag": float(np.imag(x_comp))
+            })
+            
+        return x_values
+    except Exception as e:
+        print(f"Error calculating Inverse DTFS: {e}")
+        return []

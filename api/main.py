@@ -3,38 +3,34 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional
 from api.core import symbolic, system_analyzer, fourier, roc_3d
+from sympy import symbols, Function, pi, I, Abs
 import uvicorn
 import os
+import logging
+import traceback
+
+# Setup logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logger = logging.getLogger("SignalProphetAPI")
 
 app = FastAPI(title="Signals & Systems API")
 
 # Allow CORS for local React dev server
 origins = [
-    "http://localhost:5173",  # Vite default
+    "http://localhost:5173",
     "http://127.0.0.1:5173",
+    "http://localhost:3000",
+    "https://Anurag9000.github.io"
 ]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], # For dev simplicity, allow all.
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-class ParseRequest(BaseModel):
-    expression: str
-    variable: str = 's'
-
-@app.post("/parse_transfer_function")
-def parse_transfer_function(req: ParseRequest):
-    try:
-        data = symbolic.extract_poles_zeros(req.expression, req.variable)
-        if "error" in data:
-            raise HTTPException(status_code=400, detail=data["error"])
-        return data
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
 
 class PlotRequest(BaseModel):
     expression: str
@@ -135,40 +131,30 @@ class InverseRequest(BaseModel):
 @app.post("/inverse")
 def get_inverse(req: InverseRequest):
     try:
-        # Determine domain from request (default to continuous for backward compatibility)
         domain = getattr(req, 'domain', 'continuous')
         
-        print(f"[/inverse] Type: {req.type}, Domain: {domain}")
-        
-        # 1. Compute Symbolic Inverse
         if req.type == 'laplace':
             latex_res = symbolic.compute_inverse_laplace(req.expression)
         elif req.type == 'fourier':
-            latex_res = symbolic.compute_inverse_fourier(req.expression, domain=domain)
+            latex_res = symbolic.compute_inverse_fourier(req.expression, domain=req.domain)
+        elif req.type == 'z':
+            latex_res = symbolic.compute_inverse_z(req.expression)
         else:
-            return {"error": "Invalid inverse type"}
+            raise HTTPException(status_code=400, detail="Invalid inverse type")
             
-        # 2. Compute Input Spectrum Plot Data (X(w)) - THE MISSING PIECE!
-        print(f"[/inverse] Computing spectrum for expression: {req.expression}")
+        # 2. Compute Input Spectrum Plot Data
         spec_data = symbolic.evaluate_frequency_response(req.expression, w_min=-10, w_max=10, num_points=400, type=req.type)
-        if not spec_data or not spec_data.get('magnitude'):
-            print("[/inverse] WARNING: evaluate_frequency_response returned no data")
-            spec_data = {"magnitude": {"x": [], "y": []}, "phase": {"x": [], "y": []}}
-        else:
-            print(f"[/inverse] Spectrum computed successfully: {len(spec_data['magnitude']['x'])} points")
             
-        # 3. Compute Output Time Domain Plot Data (x(t) or x[n])
+        # 3. Compute Output Time Domain Plot Data
         time_data = {"x": [], "y": []}
         if "Error" not in latex_res and "Failed" not in latex_res:
             try:
-                print(f"[/inverse] Generating time plot for: {latex_res}, domain: {domain}")
-                tx, ty = symbolic.generate_plot_data(latex_res, -5, 10, domain=domain)
+                # For inverse Z, result is always discrete
+                plot_domain = 'discrete' if req.type == 'z' else req.domain
+                tx, ty = symbolic.generate_plot_data(latex_res, -5, 10, domain=plot_domain)
                 time_data = {"x": tx, "y": ty}
-                print(f"[/inverse] Time plot generated: {len(tx)} points")
             except Exception as plot_e:
-                print(f"[/inverse] Time plot failed: {plot_e}")
-                import traceback
-                traceback.print_exc()
+                logger.error(f"[/inverse] Time plot failed: {plot_e}")
 
         return {
             "latex": latex_res,
@@ -176,7 +162,7 @@ def get_inverse(req: InverseRequest):
             "time_plot": time_data
         }
     except Exception as e:
-         return {"latex": f"Error: {str(e)}", "spectrum": None, "time_plot": None}
+         raise HTTPException(status_code=400, detail=str(e))
 
 class TransferFunctionRequest(BaseModel):
     expression: str
@@ -191,7 +177,7 @@ def parse_transfer_function_endpoint(req: TransferFunctionRequest):
         result = symbolic.parse_transfer_function(req.expression, req.variable)
         return result
     except Exception as e:
-        return {"error": str(e), "poles": [], "zeros": []}
+        raise HTTPException(status_code=400, detail=str(e))
 
 class SystemAnalysisRequest(BaseModel):
     equation: str
@@ -201,131 +187,33 @@ class SystemAnalysisRequest(BaseModel):
 @app.post("/analyze_system")
 def analyze_system_endpoint(req: SystemAnalysisRequest):
     try:
-        from api.core import system_analyzer
-        from sympy import symbols, Function, sympify
-        
-        # Analyze properties
+        # 1. Analyze properties
         properties = system_analyzer.analyze_system(req.equation, req.domain)
         
-        # Determine Input Equation
-        if req.input_equation:
-            input_str = req.input_equation
-        else:
-            input_str = 'd(t)' if req.domain == 'continuous' else 'd[n]'
-            
-        # Generate Input Plot
+        # 2. Determine Input and Output
+        input_str = req.input_equation if req.input_equation else ('d(t)' if req.domain == 'continuous' else 'd[n]')
+        
+        # 3. Calculate Input Plot
         try:
             input_px, input_py = symbolic.generate_plot_data(input_str, -5, 10, domain=req.domain)
             input_plot = {"x": input_px, "y": input_py}
-        except Exception as e:
-            print(f"[analyze_system] Input plot failed: {e}")
+        except:
             input_plot = {"x": [], "y": []}
 
-        # Generate Output Plot (System Response)
+        # 4. Calculate Response
         try:
-            # 1. Parse Input Expression
-            # e.g. input_str = "cos(t)" -> input_expr = cos(t)
-            input_expr = symbolic.parse_signal(input_str, req.domain)
-            
-            # 2. Parse System Equation with x as a Function
-            # We need to treat 'x' as a Function to handle x(t-1) etc.
-            t, n = symbols('t n')
-            x = Function('x')
-            
-            # Custom parsing to ensure x is treated as Function
-            # We reuse parse_signal logic but make sure 'x' is in local_dict as a Function
-            # Note: symbolic.py helpers might not expose local_dict, so we do it manually or rely on parse_signal
-            # Actually parse_signal maps 'x' to symbol 'x'. We might need to override.
-            # Let's try to substitute on the string level first if simple, or use symbolic substitution.
-            
-            # BETTER APPROACH: Symbolic Substitution
-            # Parse system equation using parse_signal, but we need x to be a Function.
-            # parse_signal likely defines x as Symbol 'x' from line 10 of symbolic.py
-            
-            # Let's do a trick: replacement on the string for standard cases, 
-            # OR redefine parse logic here.
-            
-            # Let's use clean symbolic substitution:
-            from sympy.parsing.sympy_parser import parse_expr, standard_transformations, implicit_multiplication_application
-            
-            transformations = (standard_transformations + (implicit_multiplication_application,))
-            local_dict = {
-                't': t, 'n': n, 
-                'x': x, # x is a Function
-                'u': symbolic.Heaviside, 'd': symbolic.DiracDelta,
-                'Heaviside': symbolic.Heaviside, 'DiracDelta': symbolic.DiracDelta,
-                'sin': symbolic.sin, 'cos': symbolic.cos, 'exp': symbolic.exp,
-                'pi': symbolic.pi, 'Abs': symbolic.Abs
-            }
-            
-            # Pre-clean system equation similar to parse_signal
-            sys_eq_clean = req.equation.replace('^', '**')
-            
-            # Normalize brackets: u[n] -> u(n), x[n] -> x(n)
-            # This is crucial for SymPy processing where functions use ()
-            sys_eq_clean = sys_eq_clean.replace('[', '(').replace(']', ')')
-            
-            # Handle aliases after bracket normalization
-            sys_eq_clean = sys_eq_clean.replace('u(', 'Heaviside(')
-            sys_eq_clean = sys_eq_clean.replace('d(', 'DiracDelta(')
-            
-            system_expr = parse_expr(sys_eq_clean, local_dict=local_dict, transformations=transformations)
-            
-            # 3. Substitute x(...) with input_expr
-            # Case A: x(t) or x(arg) -> input_expr.subs(t, arg)
-            # Case B: x (symbol) -> input_expr (direct replacement)
-            
-            # We need a lambda for the substitution
-            # input_expr depends on t (or n)
-            var = t if req.domain == 'continuous' else n
-            
-            # Define the replacement Logic
-            # sub_func will take the argument of x (e.g. t-1) and return input_expr with t replaced by t-1
-            def sub_func(*args):
-                if not args: return input_expr
-                return input_expr.subs(var, args[0])
-            
-            # Perform substitution
-            # replace(x, sub_func) handles x(t), x(t-1)
-            output_expr = system_expr.replace(x, sub_func)
-            
-            print(f"[analyze_system] Output Expr: {output_expr}")
-            
-            # 4. Generate Data from Output Expr
-            output_px, output_py = symbolic.generate_plot_data(str(output_expr), -5, 10, domain=req.domain)
-            output_plot = {"x": output_px, "y": output_py}
-            
-        except Exception as plot_e:
-            print(f"[analyze_system] Output plot failed: {plot_e}")
-            import traceback
-            traceback.print_exc()
-            output_plot = {"x": [], "y": []}
-            output_expr = "Error calculating output"
+            output_eq_str, output_plot = system_analyzer.calculate_system_response(req.equation, input_str, req.domain)
+        except Exception as e:
+            logger.error(f"Response calculation failed: {e}")
+            output_eq_str, output_plot = "Error", {"x": [], "y": []}
 
-        # Generate Impulse Response Plot
-        # properties['impulse_response'] contains h(t) string from system_analyzer
+        # 5. Calculate Impulse Response Plot
         impulse_plot = {"x": [], "y": []}
         if properties and 'impulse_response' in properties:
              try:
-                 h_str = properties['impulse_response']
-                 # Convert h_str labels back to symbolic functions for plotting if needed? 
-                 # The string returned has 'u' and 'd', symbolic parser handles them.
-                 # generate_plot_data calls parse_signal which handles u/d.
-                 h_px, h_py = symbolic.generate_plot_data(h_str, -5, 10, domain=req.domain)
+                 h_px, h_py = symbolic.generate_plot_data(properties['impulse_response'], -5, 10, domain=req.domain)
                  impulse_plot = {"x": h_px, "y": h_py}
-             except Exception as e:
-                 print(f"[analyze_system] Impulse plot failed: {e}")
-
-        output_eq_str = str(output_expr).replace('**', '^').replace('DiracDelta', 'd').replace('Heaviside', 'u')
-        if req.domain == 'discrete':
-            output_eq_str = output_eq_str.replace('(', '[').replace(')', ']')
-
-        # Safety: Ensure everything in properties is JSON serializable (convert any SymPy types to string)
-        for key in properties:
-            if isinstance(properties[key], dict) and 'explanation' in properties[key]:
-                properties[key]['explanation'] = str(properties[key]['explanation'])
-            elif not isinstance(properties[key], (str, int, float, bool, list, dict, type(None))):
-                properties[key] = str(properties[key])
+             except: pass
 
         return {
             "properties": properties, 
@@ -334,11 +222,9 @@ def analyze_system_endpoint(req: SystemAnalysisRequest):
             "impulse_plot": impulse_plot,
             "output_equation": output_eq_str
         }
-
     except Exception as e:
-        print(f"Analyze System Error: {e}")
-        import traceback
-        traceback.print_exc()
+        logger.error(f"System analysis failed: {e}")
+        logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
 
 # ==========================================
@@ -390,9 +276,17 @@ def fourier_synthesize(req: FourierSynthesisRequest):
                 "plot": {"x": x_vals, "y": y_vals}
             }
         else:
-            # DT Synthesis placeholder or implement if needed
-            # For now, let's just return empty or support later if formula based
-            return {"expression": "Not implemented for DT yet", "plot": {"x": [], "y": []}}
+            # DT Synthesis
+            x_vals_data = fourier.calculate_inverse_dtfs(req.ak_expression, req.N)
+            
+            # Extract x and y for plot
+            x_list = [item['n'] for item in x_vals_data]
+            y_list = [item['value'] for item in x_vals_data]
+            
+            return {
+                "expression": f"Synthesized sequence (N={req.N})", 
+                "plot": {"x": x_list, "y": y_list}
+            }
             
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -418,7 +312,7 @@ def detect_period_endpoint(req: PeriodDetectionRequest):
         
         return {"period": period, "message": message}
     except Exception as e:
-        return {"period": None, "message": f"Error: {str(e)}"}
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/roc/surface")

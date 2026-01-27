@@ -30,7 +30,7 @@ def test_transform_endpoint():
     }
     response = client.post("/transform", json=payload)
     assert response.status_code == 200
-    assert "1/(s + 1)" in response.json()["latex"]
+    assert "frac{1}{s + 1}" in response.json()["latex"]
 
 def test_analyze_system_endpoint():
     payload = {
@@ -63,3 +63,50 @@ def test_parse_transfer_function():
     data = response.json()
     assert len(data["poles"]) == 1
     assert data["poles"][0]["r"] == -1
+
+def test_spectrum_endpoint():
+    payload = {
+        "expression": "exp(-t)*u(t)",
+        "domain": "continuous"
+    }
+    response = client.post("/spectrum", json=payload)
+    assert response.status_code == 200
+    data = response.json()
+    assert "magnitude" in data
+    assert "phase" in data
+
+def test_convolution_endpoint():
+    payload = {
+        "x_expr": "u(t)-u(t-1)",
+        "h_expr": "u(t)-u(t-1)",
+        "domain": "continuous"
+    }
+    response = client.post("/convolution", json=payload)
+    assert response.status_code == 200
+    data = response.json()
+    assert "y" in data
+    assert "frames" in data
+
+def test_inverse_endpoint():
+    payload = {
+        "expression": "1/(s+1)",
+        "type": "laplace"
+    }
+    response = client.post("/inverse", json=payload)
+    assert response.status_code == 200
+    data = response.json()
+    assert "latex" in data
+    assert "spectrum" in data
+
+def test_roc_surface_endpoint():
+    payload = {
+        "poles": [{"r": -1, "i": 0}],
+        "zeros": [],
+        "domain": "laplace",
+        "roc_type": "causal",
+        "plot_range": 5
+    }
+    response = client.post("/roc/surface", json=payload)
+    assert response.status_code == 200
+    data = response.json()
+    assert "z" in data

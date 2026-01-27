@@ -14,13 +14,15 @@ const FrequencyLab = () => {
     // Results
     const [symbolicResult, setSymbolicResult] = useState(null);
     const [inputPlot, setInputPlot] = useState(null);
-    const [outputPlot, setOutputPlot] = useState(null);
+    const [outputMagPlot, setOutputMagPlot] = useState(null);
+    const [outputPhasePlot, setOutputPhasePlot] = useState(null);
 
     const handleCompute = async () => {
         setLoading(true);
         setSymbolicResult(null);
         setInputPlot(null);
-        setOutputPlot(null);
+        setOutputMagPlot(null);
+        setOutputPhasePlot(null);
 
         try {
             if (direction === 'forward') {
@@ -48,11 +50,10 @@ const FrequencyLab = () => {
                     w_min: -10,
                     w_max: 10
                 });
-                console.log("Spectrum response:", spectrumRes.data);
+
                 if (spectrumRes.data && spectrumRes.data.magnitude) {
-                    setOutputPlot(spectrumRes.data.magnitude);
-                } else {
-                    console.error("No magnitude data in spectrum response");
+                    setOutputMagPlot(spectrumRes.data.magnitude);
+                    setOutputPhasePlot(spectrumRes.data.phase);
                 }
             } else {
                 // Frequency Domain Input -> Time Domain Output
@@ -67,18 +68,14 @@ const FrequencyLab = () => {
                 console.log("Full /inverse response:", freqRes.data);
 
                 if (freqRes.data.spectrum) {
-                    console.log("Spectrum data:", freqRes.data.spectrum);
                     setInputPlot(freqRes.data.spectrum.magnitude);
-                } else {
-                    console.error("No spectrum in response");
                 }
                 if (freqRes.data.latex) {
                     setSymbolicResult(freqRes.data.latex);
                 }
                 if (freqRes.data.time_plot) {
-                    setOutputPlot(freqRes.data.time_plot);
-                } else {
-                    console.error("No time_plot in response");
+                    setOutputMagPlot(freqRes.data.time_plot);
+                    setOutputPhasePlot(null); // No phase for time domain plot usually needed here
                 }
             }
         } catch (e) {
@@ -99,7 +96,8 @@ const FrequencyLab = () => {
         }
         setSymbolicResult(null);
         setInputPlot(null);
-        setOutputPlot(null);
+        setOutputMagPlot(null);
+        setOutputPhasePlot(null);
     };
 
     const handleDirectionChange = (newDirection) => {
@@ -111,7 +109,8 @@ const FrequencyLab = () => {
         }
         setSymbolicResult(null);
         setInputPlot(null);
-        setOutputPlot(null);
+        setOutputMagPlot(null);
+        setOutputPhasePlot(null);
     };
 
     const inputLabel = direction === 'forward'
@@ -210,7 +209,7 @@ const FrequencyLab = () => {
             </div>
 
             {/* Results Grid */}
-            {(symbolicResult || inputPlot || outputPlot) && (
+            {(symbolicResult || inputPlot || outputMagPlot) && (
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
 
                     {/* Symbolic Result */}
@@ -250,30 +249,47 @@ const FrequencyLab = () => {
                         </div>
                     </div>
 
-                    {/* Output Plot */}
-                    <div className="space-y-4">
+                    {/* Output Plots (Mag + Phase if possible) */}
+                    <div className="space-y-6 lg:col-span-2">
                         <div className="flex items-center gap-2">
                             {direction === 'forward' ? <Waves size={18} className="text-emerald-600" /> : <Activity size={18} className="text-pink-600" />}
                             <h3 className="font-bold text-slate-800">
                                 Output: {direction === 'forward' ? 'Frequency Domain' : 'Time Domain'}
                             </h3>
                         </div>
-                        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-2 h-80">
-                            {outputPlot ? (
-                                <Visualizer
-                                    xData={outputPlot.x}
-                                    yData={outputPlot.y}
-                                    title={direction === 'forward' ? `Magnitude ${outputLabel}` : `Signal ${outputLabel}`}
-                                    xLabel={direction === 'forward' ? 'ω' : (domain === 'continuous' ? 't' : 'n')}
-                                    yLabel={outputLabel}
-                                    color="#10b981"
-                                    plotType={domain === 'discrete' && direction === 'inverse' ? 'stem' : 'line'}
-                                />
-                            ) : (
-                                <div className="h-full flex items-center justify-center text-slate-300">
-                                    {symbolicResult && symbolicResult.includes("Error") ? "Could not plot" : "No Output Plot"}
-                                </div>
-                            )}
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-2 h-72">
+                                {outputMagPlot ? (
+                                    <Visualizer
+                                        xData={outputMagPlot.x}
+                                        yData={outputMagPlot.y}
+                                        title={direction === 'forward' ? 'Magnitude Spectrum' : 'Reconstructed Signal'}
+                                        xLabel={direction === 'forward' ? 'ω' : (domain === 'continuous' ? 't' : 'n')}
+                                        yLabel={direction === 'forward' ? '|X|' : 'x'}
+                                        color={direction === 'forward' ? "#10b981" : "#ec4899"}
+                                        plotType={domain === 'discrete' && direction === 'inverse' ? 'stem' : 'line'}
+                                    />
+                                ) : <div className="h-full flex items-center justify-center text-slate-300">No output magnitude</div>}
+                            </div>
+
+                            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-2 h-72">
+                                {outputPhasePlot ? (
+                                    <Visualizer
+                                        xData={outputPhasePlot.x}
+                                        yData={outputPhasePlot.y}
+                                        title="Phase Spectrum"
+                                        xLabel="ω"
+                                        yLabel="∠X (rad)"
+                                        color="#8b5cf6"
+                                        plotType="line"
+                                    />
+                                ) : (
+                                    <div className="h-full flex items-center justify-center text-slate-300 italic text-sm p-8 text-center">
+                                        Phase plot only available for frequency domain output.
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     </div>
 
