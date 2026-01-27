@@ -282,8 +282,8 @@ def check_stability_bibo(h_expr, domain: str):
                     return {'status': 'yes', 'explanation': 'Stable: Integral of |h(t)| is finite'}
                 elif stability_limit.has(oo) or stability_limit == oo:
                     return {'status': 'no', 'explanation': 'Unstable: Integral of |h(t)| is infinite'}
-            except:
-                pass
+            except Exception as e:
+                logger.debug(f"Stability check (integral) failed: {e}")
 
             # Numerical fallback for continuous: Check if it decays at both ends
             try:
@@ -302,8 +302,8 @@ def check_stability_bibo(h_expr, domain: str):
                     return {'status': 'no', 'explanation': 'Unstable: Impulse response does not appear to decay sufficienty for BIBO stability (Numerical test)'}
                 else:
                     return {'status': 'yes', 'explanation': 'Stable: Impulse response appears to decay (Numerical test)'}
-            except:
-                pass
+            except Exception as e:
+                logger.debug(f"Stability check (numeric) failed: {e}")
                 
         else: # Discrete
             terms = Add.make_args(h_expr)
@@ -320,8 +320,8 @@ def check_stability_bibo(h_expr, domain: str):
                     return {'status': 'yes', 'explanation': 'Stable: Sum of |h[n]| is finite'}
                 elif stability_limit == oo:
                     return {'status': 'no', 'explanation': 'Unstable: Sum of |h[n]| is infinite'}
-            except:
-                pass
+            except Exception as e:
+                logger.debug(f"Stability check (discrete sum) failed: {e}")
             
             # Fallback to numerical heuristic for stability
             from sympy import lambdify

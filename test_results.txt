@@ -8,32 +8,7 @@ collected 38 items
 api\tests\test_api.py ..........                                         [ 26%]
 api\tests\test_fourier.py ...                                            [ 34%]
 api\tests\test_period_detection.py ......                                [ 50%]
-api\tests\test_symbolic.py ..........F.                                  [ 81%]
+api\tests\test_symbolic.py ............                                  [ 81%]
 api\tests\test_system_analyzer.py .......                                [100%]
 
-================================== FAILURES ===================================
-_______________________ test_compute_inverse_fourier_ct _______________________
-
-    def test_compute_inverse_fourier_ct():
-        # Test standard form detection
-        res, _ = compute_inverse_fourier("1/(I*w + 1)", "continuous")
-        assert "e^{-" in res and "t" in res
-        assert "u" in res or "Heaviside" in res
-    
-        # Test fallback
-        res, _ = compute_inverse_fourier("1/(I*w)**2", "continuous")
->       assert "t" in res and "u" in res
-E       AssertionError: assert ('t' in '- \\frac{\\mathcal{F}^{-1}_{f}\\left[\\frac{1}{f^{2}}\\right]\\left(t\\right)}{4 \\pi^{2}}' and 'u' in '- \\frac{\\mathcal{F}^{-1}_{f}\\left[\\frac{1}{f^{2}}\\right]\\left(t\\right)}{4 \\pi^{2}}')
-
-api\tests\test_symbolic.py:92: AssertionError
----------------------------- Captured stdout call -----------------------------
-[compute_inverse_fourier] Domain: continuous
-[compute_inverse_fourier] Input: 1/(I*w + 1)
-[compute_inverse_fourier] Parsed: 1/(I*w + 1)
-[compute_inverse_fourier] Domain: continuous
-[compute_inverse_fourier] Input: 1/(I*w)**2
-[compute_inverse_fourier] Parsed: -1/w**2
-[compute_inverse_fourier] Partial fractions approach returned zero/None, trying SymPy
-=========================== short test summary info ===========================
-FAILED api/tests/test_symbolic.py::test_compute_inverse_fourier_ct - Assertio...
-======================== 1 failed, 37 passed in 6.94s =========================
+============================= 38 passed in 3.83s ==============================

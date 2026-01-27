@@ -233,7 +233,6 @@ def compute_inverse_fourier(expr_str: str, domain: str = 'continuous'):
             denom_v_pos = denom_expanded.subs(exp_pos, v_dummy)
             coeff_pos = denom_v_pos.coeff(v_dummy, 1) if not denom_v_pos.has(exp_neg) else 0
             
-            const = denom_expanded.subs([(exp_neg, 0), (exp_pos, 0)])
             
             const = denom_expanded.subs([(exp_neg, 0), (exp_pos, 0)])
             
@@ -263,6 +262,8 @@ def compute_inverse_fourier(expr_str: str, domain: str = 'continuous'):
             # Simplify and combine before substitution handles some nested forms
             expr_for_apart = simplify(expr)
             expr_jw = expr_for_apart.subs(I*w, jw)
+            if not expr_jw.has(jw) and expr_for_apart.has(w):
+                 expr_jw = expr_for_apart.subs(w, jw/I)
             try:
                 expanded = apart(expr_jw, jw)
                 
@@ -557,7 +558,6 @@ def compute_spectrum(expr_str: str, w_min: float = -10, w_max: float = 10, num_p
             logger.error(f"Evaluation failed: {eval_error}")
             return None
             
-    except Exception as e:
     except Exception as e:
         logger.error(f"Spectrum Analysis Failed: {e}")
         logger.error(traceback.format_exc())

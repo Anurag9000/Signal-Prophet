@@ -15,9 +15,16 @@ const SystemAnalyzer = () => {
     const [inputPlotData, setInputPlotData] = useState(null);
     const [impulsePlotData, setImpulsePlotData] = useState(null);
     const [outputEquation, setOutputEquation] = useState('');
+    const [error, setError] = useState(null);
 
     const handleAnalyze = async () => {
         setLoading(true);
+        setError(null);
+        if (!systemEq) {
+            setLoading(false);
+            return;
+        }
+
         try {
             const res = await axios.post(`${API_URL}/analyze_system`, {
                 equation: systemEq,
@@ -43,7 +50,7 @@ const SystemAnalyzer = () => {
                 msg = error.message;
             }
 
-            alert(`Analysis Error: ${msg}`);
+            setError(`Analysis Error: ${msg}`);
         }
         setLoading(false);
     };
@@ -158,6 +165,14 @@ const SystemAnalyzer = () => {
                         {loading ? 'Analyzing...' : 'Analyze System'}
                     </button>
                 </div>
+
+                {/* Error Display */}
+                {error && (
+                    <div className="mb-8 p-4 bg-red-50 text-red-700 border border-red-200 rounded-xl flex items-center gap-3">
+                        <AlertCircle size={24} className="flex-shrink-0" />
+                        <span className="font-medium">{error}</span>
+                    </div>
+                )}
 
                 {/* Results */}
                 {properties && (

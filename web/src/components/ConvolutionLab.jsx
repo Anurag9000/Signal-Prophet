@@ -215,7 +215,15 @@ const ConvolutionLab = () => {
                         }
                     </div>
                 </div>
+
+                {error && (
+                    <div className="mt-4 p-3 bg-red-50 text-red-600 text-sm rounded-lg border border-red-100 flex items-start gap-2">
+                        <span>⚠️</span>
+                        <span>{error}</span>
+                    </div>
+                )}
             </div>
+
 
             {/* Viz Area */}
             <div className="lg:col-span-8 space-y-4">
@@ -278,7 +286,7 @@ const ConvolutionLab = () => {
                     </div>
                 )}
             </div>
-        </div>
+        </div >
     );
 };
 
