@@ -66,4 +66,4 @@ def test_full_analysis():
     results = analyze_system("2*x(t)", "continuous")
     assert results["linearity"]["status"] == "yes"
     assert results["time_invariance"]["status"] == "yes"
-    assert "2*d(t)" in results["impulse_response"]
+    assert "2\\delta(t)" in results["impulse_response"]

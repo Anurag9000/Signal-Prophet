@@ -132,13 +132,14 @@ class InverseRequest(BaseModel):
 def get_inverse(req: InverseRequest):
     try:
         domain = getattr(req, 'domain', 'continuous')
+        expr_obj = None
         
         if req.type == 'laplace':
-            latex_res = symbolic.compute_inverse_laplace(req.expression)
+            latex_res, expr_obj = symbolic.compute_inverse_laplace(req.expression)
         elif req.type == 'fourier':
-            latex_res = symbolic.compute_inverse_fourier(req.expression, domain=req.domain)
+            latex_res, expr_obj = symbolic.compute_inverse_fourier(req.expression, domain=req.domain)
         elif req.type == 'z':
-            latex_res = symbolic.compute_inverse_z(req.expression)
+            latex_res, expr_obj = symbolic.compute_inverse_z(req.expression)
         else:
             raise HTTPException(status_code=400, detail="Invalid inverse type")
             
@@ -147,11 +148,11 @@ def get_inverse(req: InverseRequest):
             
         # 3. Compute Output Time Domain Plot Data
         time_data = {"x": [], "y": []}
-        if "Error" not in latex_res and "Failed" not in latex_res:
+        if expr_obj is not None:
             try:
                 # For inverse Z, result is always discrete
                 plot_domain = 'discrete' if req.type == 'z' else req.domain
-                tx, ty = symbolic.generate_plot_data(latex_res, -5, 10, domain=plot_domain)
+                tx, ty = symbolic.generate_plot_data(expr_obj, -5, 10, domain=plot_domain)
                 time_data = {"x": tx, "y": ty}
             except Exception as plot_e:
                 logger.error(f"[/inverse] Time plot failed: {plot_e}")

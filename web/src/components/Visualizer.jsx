@@ -27,17 +27,19 @@ const Visualizer = ({ xData, yData, title, xLabel, yLabel, plotType = 'line', co
             return hex;
         };
         const validData = Array.isArray(xData) && Array.isArray(yData) && xData.length > 0;
+        const safeX = validData ? xData : [0];
+        const safeY = validData ? yData : [0];
+        const len = safeX.length;
 
         if (!validData) {
-            return [{
-                x: [0], y: [0],
-                type: 'scatter',
-                mode: 'text',
-                text: ['No Data'],
-                showlegend: false
-            }];
+            return (
+                <div className="w-full h-80 bg-white rounded-lg shadow-sm border border-slate-200 flex items-center justify-center text-slate-400">
+                    <p>No Data for {title}</p>
+                </div>
+            );
         }
 
+        let data = [];
         if (plotType === 'stem') {
             // Optimized Stem Plot: Single trace for all stems using null-gap technique
             const stemX = [];
@@ -77,7 +79,7 @@ const Visualizer = ({ xData, yData, title, xLabel, yLabel, plotType = 'line', co
                 mode: 'lines',
                 line: { color: color, width: 2.5 },
                 fill: 'tozeroy',
-                fillcolor: color + '20'
+                fillcolor: getRgba(color, 0.2)
             }];
         }
 

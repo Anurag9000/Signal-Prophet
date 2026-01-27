@@ -13,8 +13,8 @@ class VisualDirac:
         self.domain = domain
     def __call__(self, x):
         tolerance = 0.05 if self.domain == 'continuous' else 0.1
-        # For continuous, we want a high spike. For discrete, exactly 1 at 0.
-        height = 5.0 if self.domain == 'continuous' else 1.0
+        # For continuous, we want area = 1.0. Area = height * (2 * tolerance)
+        height = 1.0 / (2 * tolerance) if self.domain == 'continuous' else 1.0
         return np.where(np.abs(x) < tolerance, height, 0.0)
 
 def get_shared_modules_dict(domain='continuous'):
@@ -43,13 +43,24 @@ def clean_output_str(s: str, domain: str = 'continuous'):
     if not isinstance(s, str):
         s = str(s)
 
-    # Basic cleanup
-    res = s.replace('**', '^').replace('*', '')
+    # Remove unnecessary decimals
+    res = re.sub(r'(\d+)\.0+(?!\d)', r'\1', s)
+    
+    # Replace ** with ^
+    res = res.replace('**', '^')
+    
+    # Selective asterisk removal for readability (avoiding merging variables like a*b -> ab)
+    # 1. Between number and letter: 2*t -> 2t
+    res = re.sub(r'(\d)\*([a-zA-Z\\])', r'\1\2', res)
+    # 2. Between closing paren/bracket and something else: (t)*x -> (t)x
+    res = re.sub(r'([\)\]])\*', r'\1', res)
+    # 3. Between something and opening paren/bracket: 2*(t) -> 2(t)
+    res = re.sub(r'\*([\(\[])', r'\1', res)
 
     # Engineering notation: replace DiracDelta with delta, Heaviside with u
     res = res.replace('DiracDelta', r'\delta').replace('Heaviside', 'u')
     res = res.replace('KroneckerDelta', r'\delta')  # For discrete
-    res = res.replace('theta', 'u') # SymPy sometimes outputs \theta for Heaviside
+    res = res.replace('\\theta', 'u').replace('theta', 'u') # SymPy sometimes outputs \theta or theta for Heaviside
 
     if domain == 'discrete':
         # Replace only parentheses around variables, including shifted ones

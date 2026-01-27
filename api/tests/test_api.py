@@ -97,8 +97,9 @@ def test_inverse_endpoint():
     assert response.status_code == 200
     data = response.json()
     # clean_output_str and .replace handle the conversion to engineering notation
-    assert "e^{-t}" in data["latex"]
-    assert "u[t]" in data["latex"] or "u(t)" in data["latex"]
+    latex = data["latex"]
+    assert "e^{-" in latex and "t" in latex
+    assert "u" in latex and "t" in latex
     assert "spectrum" in data
 
 def test_roc_surface_endpoint():

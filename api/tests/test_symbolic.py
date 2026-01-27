@@ -1,7 +1,7 @@
 import pytest
 import numpy as np
 from sympy import symbols, Heaviside, DiracDelta, exp, sin, pi, Abs
-from api.core.symbolic import parse_signal, generate_plot_data, compute_laplace, compute_fourier, compute_inverse_fourier, evaluate_frequency_response
+from api.core.symbolic import parse_signal, generate_plot_data, compute_laplace, compute_fourier, compute_inverse_fourier, compute_inverse_laplace, evaluate_frequency_response
 
 def test_parse_signal_standard():
     # Test standard functions
@@ -65,6 +65,10 @@ def test_generate_plot_data_dt():
     assert y[5] == 1.0 # u[0]
     assert y[4] == 0.0 # u[-1]
 
+def test_compute_inverse_laplace():
+    res, _ = compute_inverse_laplace("1/(s+1)")
+    assert "e^{-" in res and "t" in res
+
 def test_compute_laplace():
     res = compute_laplace("exp(-t)*u(t)")
     # L{e^-t u(t)} = 1/(s+1)
@@ -79,10 +83,13 @@ def test_compute_fourier():
 
 def test_compute_inverse_fourier_ct():
     # Test standard form detection
-    res = compute_inverse_fourier("1/(j*w + 1)", "continuous")
-    print(f"DEBUG: {res}")
+    res, _ = compute_inverse_fourier("1/(I*w + 1)", "continuous")
     assert "e^{-" in res and "t" in res
     assert "u" in res or "Heaviside" in res
+    
+    # Test fallback
+    res, _ = compute_inverse_fourier("1/(I*w)**2", "continuous")
+    assert "t" in res and "u" in res
 
 def test_evaluate_frequency_response():
     resp = evaluate_frequency_response("1/(1 + j*w)", w_min=-5, w_max=5)

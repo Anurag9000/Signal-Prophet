@@ -28,23 +28,35 @@ def calculate_ctfs(signal_eq: str, T: float, k_min: int = -5, k_max: int = 5):
         
         for k_val in range(k_min, k_max + 1):
             # Term to integrate: x(t) * exp(-j * k * w0 * t)
-            # exp(0) is 1, so no need for special k=0 check
             term = x_expr * exp(-I * k_val * w0 * t)
             
-            # Integrate over one period [0, T]
-            # Note: User equation might be definedpiecewise or valid for all t.
-            # Assuming periodic extension of the definition in [0, T] or standard function.
-            
-            # Integrate over one period [-T/2, T/2] which is better for centered signals
-            ak_sym = integrate(term, (t, -T_sym/2, T_sym/2)) / T_sym
-            ak_sym = simplify(ak_sym)
-            
-            # Evaluate to complex number for plotting
-            ak_num = complex(ak_sym.evalf())
+            # Integrate over one period [-T_sym/2, T_sym/2] which is better for centered signals
+            try:
+                ak_sym = integrate(term, (t, -T_sym/2, T_sym/2)) / T_sym
+                ak_sym = simplify(ak_sym)
+                
+                # Evaluate to complex number for plotting
+                ak_num = complex(ak_sym.evalf())
+                ak_str = str(ak_sym).replace('**', '^').replace('I', 'j')
+            except Exception as integ_err:
+                print(f"Integration failed for k={k_val}: {integ_err}")
+                # Fallback to numerical integration if symbolic fails
+                try:
+                    from sympy import lambdify
+                    f_num = lambdify(t, term, modules=['numpy', 'sympy'])
+                    # Simple numerical integration over one period
+                    t_vals = np.linspace(-float(T)/2, float(T)/2, 1000)
+                    y_vals = f_num(t_vals)
+                    dt = t_vals[1] - t_vals[0]
+                    ak_num = np.sum(y_vals) * dt / float(T)
+                    ak_str = f"{ak_num.real:.4f} + {ak_num.imag:.4f}j (Numerical)"
+                except:
+                    ak_num = 0j
+                    ak_str = "Integration Failed"
             
             coeffs.append({
                 "k": int(k_val),
-                "value_str": str(ak_sym).replace('**', '^').replace('I', 'j'),
+                "value_str": ak_str,
                 "magnitude": float(abs(ak_num)),
                 "phase": float(arg(ak_num)),
                 "real": float(ak_num.real),

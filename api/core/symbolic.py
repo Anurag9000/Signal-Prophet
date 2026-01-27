@@ -160,13 +160,13 @@ def compute_inverse_z(expr_str: str):
                 if res is not None:
                     inv_expr += res
                 else:
-                    return f"Inverse Z-Transform: Term {arg} not supported symbolically."
+                    return f"Inverse Z-Transform: Term {arg} not supported symbolically.", None
         else:
             inv_expr = invert_term(expanded)
             if inv_expr is None:
-                return "Inverse Z-Transform: Form not yet supported symbolically."
+                return "Inverse Z-Transform: Form not yet supported symbolically.", None
         
-        return clean_output_str(latex(inv_expr), domain='discrete').replace('\\theta', 'u')
+        return clean_output_str(latex(inv_expr), domain='discrete').replace('\\theta', 'u'), inv_expr
     except Exception as e:
         # 2. Handle simple delays/advances that SymPy might struggle with directly
         # Case: z**(-m) -> delta[n-m]
@@ -174,9 +174,10 @@ def compute_inverse_z(expr_str: str):
         delay_match = re.match(r'^z\^?\(?(\-?\d+)\)?$', expr_str.strip())
         if delay_match:
             shift = int(delay_match.group(1))
-            return f"\\delta[n{'%s' % shift if shift >= 0 else shift}]"
+            res_str = f"\\delta[n{'+' if shift >= 0 else ''}{shift}]"
+            return res_str, None
             
-        return f"Inverse Z-Transform Failed: {str(e)}"
+        return f"Inverse Z-Transform Failed: {str(e)}", None
 
 def compute_inverse_fourier(expr_str: str, domain: str = 'continuous'):
     """
@@ -242,14 +243,16 @@ def compute_inverse_fourier(expr_str: str, domain: str = 'continuous'):
                 # DTFT inverse is basically (1/2pi) * int(X * exp(jwn) dw) from -pi to pi
                 # SymPy doesn't have a direct DTFT inverse that works reliably with 'w'
                 # So we return a specialized message or try to use Z-transform logic if applicable
-                return f"Inverse DTFT: Complex form {expr}. Use Z-transform for rational forms."
+                return f"Inverse DTFT: Complex form {expr}. Use Z-transform for rational forms.", None
         else:  # Continuous
             # CTFT Inverse: X(jω) -> x(t)
             # Standard form: K/(I*w + a) <-> K*e^(-at)*u(t) for a > 0
             
             # Mask 'I*w' as a single variable 'jw' to use apart()
             jw = symbols('jw')
-            expr_jw = expr.subs(I*w, jw)
+            # Simplify and combine before substitution handles some nested forms
+            expr_for_apart = simplify(expr)
+            expr_jw = expr_for_apart.subs(I*w, jw)
             try:
                 expanded = apart(expr_jw, jw)
                 
@@ -257,36 +260,52 @@ def compute_inverse_fourier(expr_str: str, domain: str = 'continuous'):
                     n_t, d_t = fraction(term)
                     poles = solve(d_t, jw)
                     if len(poles) == 1:
-                        p = poles[0] # jw = p -> jw - p = 0
+                        p = poles[0]
                         # K / (jw - p) -> K * exp(p*t) * u(t) if Re(p) < 0
                         K = simplify(term * (jw - p))
                         if not K.has(jw):
                             return K * exp(p * t) * Heaviside(t)
+                    
+                    # Case: K / (jw - p)^n -> K * t^(n-1)/(n-1)! * exp(p*t) * u(t)
+                    # We need to find the degree of (jw - p) in the denominator
+                    from sympy import Poly, factorial
+                    try:
+                        p_obj = Poly(d_t, jw)
+                        if p_obj.degree() > 1 and len(poles) == 1:
+                            p = poles[0]
+                            n_val = p_obj.degree()
+                            K = n_t / p_obj.LC()
+                            return K * (t**(n_val-1) / factorial(n_val-1)) * exp(p*t) * Heaviside(t)
+                    except:
+                        pass
                     return None
                 
                 if isinstance(expanded, Add):
-                    f = sum([invert_ct_term(a) for a in expanded.args if invert_ct_term(a) is not None])
+                    f = 0
+                    for arg in expanded.args:
+                        term_res = invert_ct_term(arg)
+                        if term_res is not None:
+                            f += term_res
                 else:
                     f = invert_ct_term(expanded)
                 
                 if f is None or f == 0:
-                    print(f"[compute_inverse_fourier] Partial fractions failed, trying SymPy")
-                    f = inverse_fourier_transform(expr, w, t)
-            except:
-                print(f"[compute_inverse_fourier] apart(jw) failed, trying SymPy")
-                # Scale w properly for SymPy: SymPy uses f (freq) instead of w (ang freq)
-                # inverse_fourier_transform(F, f, t)
+                    print(f"[compute_inverse_fourier] Partial fractions approach returned zero/None, trying SymPy")
+                    # Try direct inverse if it's a simple rational form of w
+                    f = inverse_fourier_transform(expr.subs(w, 2*pi*symbols('f')), symbols('f'), t)
+            except Exception as e_apart:
+                print(f"[compute_inverse_fourier] apart(jw) failed: {e_apart}, trying SymPy")
                 f = inverse_fourier_transform(expr.subs(w, 2*pi*symbols('f')), symbols('f'), t)
         
         # Simplify and format
         f = simplify(f)
-        return latex(f).replace('\\theta', 'u').replace('**', '^').replace('I', 'j')
+        return latex(f).replace('\\theta', 'u').replace('**', '^').replace('I', 'j'), f
         
     except Exception as e:
         print(f"[compute_inverse_fourier] ERROR: {e}")
         import traceback
         traceback.print_exc()
-        return f"Inverse Fourier Failed: {str(e)}"
+        return f"Inverse Fourier Failed: {str(e)}", None
 
 
 def evaluate_frequency_response(expr_str: str, w_min: float = -10, w_max: float = 10, num_points: int = 400, type: str = 'fourier'):
@@ -336,57 +355,58 @@ def evaluate_frequency_response(expr_str: str, w_min: float = -10, w_max: float 
         print(f"[evaluate_frequency_response] Error: {e}")
         return {"magnitude": {"x": [], "y": []}, "phase": {"x": [], "y": []}}
 
-def generate_plot_data(expr_str: str, t_min: float = -10, t_max: float = 10, num_points: int = 1000, domain: str = 'continuous'):
+def generate_plot_data(expr_str_or_obj, t_min: float = -5, t_max: float = 5, num_points: int = 500, domain: str = 'continuous'):
     """
     Generates x, y arrays for plotting.
-    Continuous: smooth curve with many points
-    Discrete: integer samples only (stem plot)
     """
-    # Preprocess: convert formatted notation back to parseable format
-    # u[n] -> Heaviside(n), u(t) -> Heaviside(t)
-    # ^ -> **
-    expr_str = expr_str.replace('^', '**')
-    
-    print(f"[generate_plot_data] Input: {expr_str}, Domain: {domain}")
-    
-    expr = parse_signal(expr_str, domain)
-    
-    # Visual Proxy for DiracDelta: Replace with VisualDirac for plotting
-    from sympy import Function
-    VisualDirac = Function('VisualDirac')
-    expr_visual = expr.replace(DiracDelta, VisualDirac)
-    
-    # Use shared modules dict
-    modules_dict = get_shared_modules_dict(domain)
-
-    if domain == 'continuous':
-        # Create lambda function
-        f = lambdify(t, expr_visual, modules=modules_dict)
-        # Generate time vector
-        t_vals = np.linspace(t_min, t_max, num_points)
-        try:
-            y_vals = f(t_vals)
-            # Handle constant output
-            if np.isscalar(y_vals):
-                y_vals = np.full_like(t_vals, y_vals)
-        except Exception:
-            # Fallback for complex issues or singularities: eval one by one (slower but safer)
-            y_vals = np.zeros_like(t_vals)
-            
-        return t_vals.tolist(), np.real(y_vals).tolist() # Return real part for standard plotting
+    try:
+        if isinstance(expr_str_or_obj, str):
+            # Preprocess: convert formatted notation back to parseable format
+            expr_str = expr_str_or_obj.replace('^', '**')
+            expr = parse_signal(expr_str, domain)
+        else:
+            expr = expr_str_or_obj
         
-    elif domain == 'discrete':
-        f = lambdify(n, expr_visual, modules=modules_dict)
-        # Integer samples only for discrete signals
-        n_vals = np.arange(int(t_min), int(t_max) + 1)  # e.g., -10, -9, ..., 0, ..., 10
-        try:
-            y_vals = f(n_vals)
-            if np.isscalar(y_vals):
-                y_vals = np.full_like(n_vals, y_vals, dtype=float)
-        except Exception:
-            y_vals = np.zeros_like(n_vals, dtype=float)
+        # Visual Proxy for DiracDelta: Replace with VisualDirac for plotting
+        from sympy import Function
+        VisualDirac = Function('VisualDirac')
+        expr_visual = expr.replace(DiracDelta, VisualDirac)
+        
+        # Use shared modules dict
+        modules_dict = get_shared_modules_dict(domain)
+
+        if domain == 'continuous':
+            # Create lambda function
+            f = lambdify(t, expr_visual, modules=modules_dict)
+            # Generate time vector
+            t_vals = np.linspace(t_min, t_max, num_points)
+            try:
+                y_vals = f(t_vals)
+                # Handle constant output
+                if np.isscalar(y_vals):
+                    y_vals = np.full_like(t_vals, y_vals)
+            except Exception:
+                # Fallback for complex issues or singularities: eval one by one (slower but safer)
+                y_vals = np.zeros_like(t_vals)
             
-        return n_vals.tolist(), np.real(y_vals).tolist()
+            return t_vals.tolist(), np.real(y_vals).tolist() # Return real part for standard plotting
+            
+        elif domain == 'discrete':
+            f = lambdify(n, expr_visual, modules=modules_dict)
+            # Integer samples only for discrete signals
+            n_vals = np.arange(int(t_min), int(t_max) + 1)
+            try:
+                y_vals = f(n_vals)
+                if np.isscalar(y_vals):
+                    y_vals = np.full_like(n_vals, y_vals, dtype=float)
+            except Exception:
+                y_vals = np.zeros_like(n_vals, dtype=float)
+                
+            return n_vals.tolist(), np.real(y_vals).tolist()
+            
+    except Exception as outer_e:
+        print(f"[generate_plot_data] Error: {outer_e}")
+        return [], []
 
 def compute_laplace(expr_str: str):
     expr = parse_signal(expr_str, 'continuous')
@@ -412,7 +432,7 @@ def compute_fourier(expr_str: str):
 
 def compute_inverse_laplace(expr_str: str):
     try:
-        from sympy import inverse_laplace_transform, symbols, Function, s, t, latex, sympify
+        from sympy import inverse_laplace_transform, symbols, Function, latex, sympify
         
         # Parse the expression
         expr = parse_signal(expr_str, 'continuous')
@@ -421,9 +441,10 @@ def compute_inverse_laplace(expr_str: str):
         f = inverse_laplace_transform(expr, s, t)
         
         # Standardize output notation (\theta -> u)
-        return clean_output_str(latex(f), domain='continuous').replace('\\theta', 'u')
+        res_latex = clean_output_str(latex(f), domain='continuous').replace('\\theta', 'u')
+        return res_latex, f
     except Exception as e:
-        return f"Inverse Laplace Failed: {str(e)}"
+        return f"Inverse Laplace Failed: {str(e)}", None
 
 
 def compute_spectrum(expr_str: str, w_min: float = -10, w_max: float = 10, num_points: int = 500, domain: str = 'continuous'):
@@ -441,7 +462,10 @@ def compute_spectrum(expr_str: str, w_min: float = -10, w_max: float = 10, num_p
         if domain == 'continuous':
             # Get X(jω) symbolically
             try:
-                X_jw = fourier_transform(expr, t, w)
+                # Engineering standard: X(jw) = int x(t)e^(-jwt) dt
+                # SymPy fourier_transform(f, t, w) uses e^(-2pi*i*w*t)
+                # So we use w/(2*pi) to match the angular frequency w
+                X_jw = fourier_transform(expr, t, w / (2 * pi))
             except:
                 # If symbolic transform fails, try direct integration
                 X_jw = integrate(expr * exp(-I * w * t), (t, -oo, oo))

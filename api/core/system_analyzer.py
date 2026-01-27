@@ -280,16 +280,23 @@ def check_stability_bibo(h_expr, domain: str):
             except:
                 pass
 
-            # Numerical fallback for continuous
+            # Numerical fallback for continuous: Check if it decays at both ends
             try:
                 from sympy import lambdify
                 h_fn = lambdify(t, remaining_h, modules=['numpy', 'sympy'])
-                t_test = np.linspace(0, 500, 5000) # Check large positive time
-                h_vals = np.abs(h_fn(t_test))
-                if np.mean(h_vals[-100:]) > 1e-3: # Check if it decays
-                    return {'status': 'no', 'explanation': 'Unstable: Impulse response does not appear to decay to zero (Numerical test)'}
+                t_test_pos = np.linspace(0, 500, 1000)
+                t_test_neg = np.linspace(-500, 0, 1000)
+                
+                # Check for decay at both ends
+                h_vals_pos = np.abs(h_fn(t_test_pos))
+                h_vals_neg = np.abs(h_fn(t_test_neg))
+                
+                # Heuristic: sum of absolute values should be relatively small
+                # compared to the range, indicating decay.
+                if np.sum(h_vals_pos) > 100 or np.sum(h_vals_neg) > 100:
+                    return {'status': 'no', 'explanation': 'Unstable: Impulse response does not appear to decay sufficienty for BIBO stability (Numerical test)'}
                 else:
-                    return {'status': 'yes', 'explanation': 'Stable: Impulse response appears to decay to zero (Numerical test)'}
+                    return {'status': 'yes', 'explanation': 'Stable: Impulse response appears to decay (Numerical test)'}
             except:
                 pass
                 
