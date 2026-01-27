@@ -660,7 +660,7 @@ const ROCExplorer = () => {
                 </div>
             </div>
 
-            <div className={`mt-4 p-4 border rounded-lg ${analysis.valid === false ? 'bg-red-50 border-red-300' : 'bg-slate-50 border-slate-100'}`}>
+            <div className={`p-4 border rounded-lg lg:col-span-3 ${analysis.valid === false ? 'bg-red-50 border-red-300' : 'bg-slate-50 border-slate-100'}`}>
                 <p className={`text-sm font-medium ${analysis.valid === false ? 'text-red-900' : 'text-slate-900'}`}>
                     {analysis.valid === false ? '⚠️ Invalid Configuration' : 'Analysis'}
                 </p>

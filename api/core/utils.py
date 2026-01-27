@@ -13,8 +13,9 @@ class VisualDirac:
         self.domain = domain
     def __call__(self, x):
         tolerance = 0.05 if self.domain == 'continuous' else 0.1
-        # For continuous, we want a spike. For discrete, exactly 1 at 0.
-        return np.where(np.abs(x) < tolerance, 1.0, 0.0)
+        # For continuous, we want a high spike. For discrete, exactly 1 at 0.
+        height = 5.0 if self.domain == 'continuous' else 1.0
+        return np.where(np.abs(x) < tolerance, height, 0.0)
 
 def get_shared_modules_dict(domain='continuous'):
     """Shared lambdify modules dictionary."""
@@ -36,9 +37,26 @@ def get_shared_modules_dict(domain='continuous'):
     ]
 
 def clean_output_str(s: str, domain: str = 'continuous'):
-    """Standardizes symbolic output strings for SnS notation."""
-    res = s.replace('**', '^').replace('DiracDelta', 'd').replace('Heaviside', 'u').replace('KroneckerDelta', 'd').replace('I', 'j')
+    """
+    Standardize symbolic output for display (remove unnecessary decimals, simplify expressions).
+    """
+    if not isinstance(s, str):
+        s = str(s)
+
+    # Basic cleanup
+    res = s.replace('**', '^').replace('*', '')
+
+    # Engineering notation: replace DiracDelta with delta, Heaviside with u
+    res = res.replace('DiracDelta', r'\delta').replace('Heaviside', 'u')
+    res = res.replace('KroneckerDelta', r'\delta')  # For discrete
+    res = res.replace('theta', 'u') # SymPy sometimes outputs \theta for Heaviside
+
     if domain == 'discrete':
-        # Use regex to replace only parentheses around variables, not all parentheses
-        res = re.sub(r'\((n|k|nv)\)', r'[\1]', res)
+        # Replace only parentheses around variables, including shifted ones
+        # Capture variables: n, k, nv, m
+        res = re.sub(r'\((n|k|nv|m|i|j)([\+\-]\d+)?\)', r'[\1\2]', res)
+    
+    # Final strip of any double backslashes that might have been escaped
+    res = res.replace('\\\\', '\\')
+    
     return res

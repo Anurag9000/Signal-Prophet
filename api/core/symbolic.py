@@ -166,8 +166,16 @@ def compute_inverse_z(expr_str: str):
             if inv_expr is None:
                 return "Inverse Z-Transform: Form not yet supported symbolically."
         
-        return latex(inv_expr).replace('\\theta', 'u').replace('**', '^').replace('I', 'j')
+        return clean_output_str(latex(inv_expr), domain='discrete').replace('\\theta', 'u')
     except Exception as e:
+        # 2. Handle simple delays/advances that SymPy might struggle with directly
+        # Case: z**(-m) -> delta[n-m]
+        import re
+        delay_match = re.match(r'^z\^?\(?(\-?\d+)\)?$', expr_str.strip())
+        if delay_match:
+            shift = int(delay_match.group(1))
+            return f"\\delta[n{'%s' % shift if shift >= 0 else shift}]"
+            
         return f"Inverse Z-Transform Failed: {str(e)}"
 
 def compute_inverse_fourier(expr_str: str, domain: str = 'continuous'):
@@ -401,21 +409,19 @@ def compute_fourier(expr_str: str):
     except Exception as e:
         return f"Could not compute Fourier Transform: {str(e)}"
 
+
 def compute_inverse_laplace(expr_str: str):
     try:
-        # User inputs X(s). We need to parse X(s) not x(t).
-        # We need a parse_transform helper or re-use parse_signal with 's' context
-        # But parse_signal expects t/n primarily.
-        # Let's trust parse_signal handles s if we pass relevant hints or just standard parse
+        from sympy import inverse_laplace_transform, symbols, Function, s, t, latex, sympify
         
-        # Local dict needs 's' which is there.
-        # We also need to ensure user uses 's'.
-        expr = parse_signal(expr_str, 'continuous') # reuse parse logic, it has 's'
+        # Parse the expression
+        expr = parse_signal(expr_str, 'continuous')
         
-        from sympy import latex
         # inverse_laplace_transform(F, s, t)
         f = inverse_laplace_transform(expr, s, t)
-        return latex(f).replace('\\theta', 'u')
+        
+        # Standardize output notation (\theta -> u)
+        return clean_output_str(latex(f), domain='continuous').replace('\\theta', 'u')
     except Exception as e:
         return f"Inverse Laplace Failed: {str(e)}"
 
@@ -593,17 +599,14 @@ def compute_convolution(x_str: str, h_str: str, domain: str = 'continuous'):
     """
     try:
         # Define visual modules (same as generate_plot_data)
-        class VisualDirac:
-            def __init__(self): pass
-            @staticmethod
-            def __call__(x): return np.where(np.abs(x) < 0.05, 10.0, 0.0)
+        from api.core.utils import VisualDirac
         
         modules_dict = [
             'numpy',
             {'Heaviside': lambda x: np.where(x >= 0, 1.0, 0.0),
-             'DiracDelta': VisualDirac(),
-             'VisualDirac': VisualDirac(),
-             'KroneckerDelta': lambda x, y: np.where(np.abs(x-y) < 0.1, 1.0, 0.0),
+             'DiracDelta': VisualDirac('continuous'),
+             'VisualDirac': VisualDirac('continuous'),
+             'KroneckerDelta': VisualDirac('discrete'),
              'rect': lambda x: np.where(np.abs(x) <= 0.5, 1.0, 0.0),
              'tri': lambda x: np.maximum(0, 1 - np.abs(x)),
              'sinc': np.sinc,

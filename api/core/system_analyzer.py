@@ -58,7 +58,13 @@ def check_linearity(eq: str, domain: str):
             'sin': sin, 'cos': cos, 'exp': exp, 'log': log, 'Abs': Abs
         }
         transformations = (standard_transformations + (implicit_multiplication_application,))
-        clean_eq = eq.replace('^', '**').replace('[', '(').replace(']', ')')
+        
+        # Pre-process: Normalize brackets for discrete signals
+        # ONLY normalize x[...] and h[...], NOT all brackets
+        clean_eq = eq.replace('^', '**')
+        # Selective bracket replacement for signal functions only
+        clean_eq = re.sub(r'x\[([^\]]*)\]', r'x(\1)', clean_eq)
+        clean_eq = re.sub(r'h\[([^\]]*)\]', r'h(\1)', clean_eq)
         
         # Parse y = S[x]
         sys_expr = parse_expr(clean_eq, local_dict=local_dict, transformations=transformations)

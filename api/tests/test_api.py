@@ -31,6 +31,7 @@ def test_transform_endpoint():
     response = client.post("/transform", json=payload)
     assert response.status_code == 200
     assert "frac{1}{s + 1}" in response.json()["latex"]
+    # Check for engineering notation u instead of Heaviside (usually in inverse)
 
 def test_analyze_system_endpoint():
     payload = {
@@ -95,7 +96,9 @@ def test_inverse_endpoint():
     response = client.post("/inverse", json=payload)
     assert response.status_code == 200
     data = response.json()
-    assert "latex" in data
+    # clean_output_str and .replace handle the conversion to engineering notation
+    assert "e^{-t}" in data["latex"]
+    assert "u[t]" in data["latex"] or "u(t)" in data["latex"]
     assert "spectrum" in data
 
 def test_roc_surface_endpoint():

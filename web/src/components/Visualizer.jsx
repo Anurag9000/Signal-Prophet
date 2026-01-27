@@ -15,13 +15,29 @@ const Visualizer = ({ xData, yData, title, xLabel, yLabel, plotType = 'line', co
 
     try {
         // Ensure lengths match to avoid Plotly errors
-        const len = Math.min(xData.length, yData.length);
-        if (len === 0) throw new Error("Empty Data");
+        const getRgba = (hex, alpha) => {
+            if (!hex) return `rgba(99, 102, 241, ${alpha})`;
+            if (hex.startsWith('#')) {
+                const r = parseInt(hex.slice(1, 3), 16);
+                const g = parseInt(hex.slice(3, 5), 16);
+                const b = parseInt(hex.slice(5, 7), 16);
+                return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+            }
+            // Fallback for named colors or other formats
+            return hex;
+        };
+        const validData = Array.isArray(xData) && Array.isArray(yData) && xData.length > 0;
 
-        const safeX = xData.slice(0, len);
-        const safeY = yData.slice(0, len);
+        if (!validData) {
+            return [{
+                x: [0], y: [0],
+                type: 'scatter',
+                mode: 'text',
+                text: ['No Data'],
+                showlegend: false
+            }];
+        }
 
-        let data = [];
         if (plotType === 'stem') {
             // Optimized Stem Plot: Single trace for all stems using null-gap technique
             const stemX = [];
