@@ -27,9 +27,12 @@ const ConvolutionLab = () => {
         setIsPlaying(false);
     }, [domain]);
 
+    const [error, setError] = useState(null);
+
     const handleSimulate = async () => {
         setLoading(true);
         setIsPlaying(false);
+        setError(null);
         try {
             const res = await axios.post(`${API_URL}/convolution`, {
                 x_expr: xExpr,
@@ -40,7 +43,7 @@ const ConvolutionLab = () => {
             setFrameIdx(0);
         } catch (e) {
             console.error(e);
-            alert("Simulation failed. Check syntax.");
+            setError("Simulation failed. Check syntax and ensure signal compatibility.");
         } finally {
             setLoading(false);
         }

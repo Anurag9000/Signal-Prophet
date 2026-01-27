@@ -27,29 +27,29 @@ const FrequencyLab = () => {
         try {
             if (direction === 'forward') {
                 // Time Domain Input -> Frequency Domain Output
-                // 1. Plot input time signal
-                const timePlotRes = await axios.post(`${API_URL}/plot`, {
-                    expression,
-                    t_min: -5,
-                    t_max: 5,
-                    domain
-                });
+
+                // Execute requests in parallel for better performance
+                const [timePlotRes, transformRes, spectrumRes] = await Promise.all([
+                    axios.post(`${API_URL}/plot`, {
+                        expression,
+                        t_min: -5,
+                        t_max: 5,
+                        domain
+                    }),
+                    axios.post(`${API_URL}/transform`, {
+                        expression,
+                        type: 'fourier'
+                    }),
+                    axios.post(`${API_URL}/spectrum`, {
+                        expression,
+                        domain,
+                        w_min: -10,
+                        w_max: 10
+                    })
+                ]);
+
                 setInputPlot(timePlotRes.data);
-
-                // 2. Compute symbolic transform
-                const transformRes = await axios.post(`${API_URL}/transform`, {
-                    expression,
-                    type: 'fourier' // Always Fourier for CTFT/DTFT
-                });
                 setSymbolicResult(transformRes.data.latex);
-
-                // 3. Compute frequency spectrum
-                const spectrumRes = await axios.post(`${API_URL}/spectrum`, {
-                    expression,
-                    domain,
-                    w_min: -10,
-                    w_max: 10
-                });
 
                 if (spectrumRes.data && spectrumRes.data.magnitude) {
                     setOutputMagPlot(spectrumRes.data.magnitude);
@@ -58,14 +58,11 @@ const FrequencyLab = () => {
             } else {
                 // Frequency Domain Input -> Time Domain Output
                 // 1. Plot input frequency response
-                console.log("Calling /inverse with expression:", expression);
                 const freqRes = await axios.post(`${API_URL}/inverse`, {
                     expression,
                     type: 'fourier',
                     domain: domain
                 });
-
-                console.log("Full /inverse response:", freqRes.data);
 
                 if (freqRes.data.spectrum) {
                     setInputPlot(freqRes.data.spectrum.magnitude);
@@ -80,7 +77,7 @@ const FrequencyLab = () => {
             }
         } catch (e) {
             console.error(e);
-            setSymbolicResult("\\text{Error: " + e.message + "}");
+            setSymbolicResult("\\text{Error: " + (e.response?.data?.detail || e.message) + "}");
         } finally {
             setLoading(false);
         }

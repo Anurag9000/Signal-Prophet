@@ -2,6 +2,8 @@ from api.core.utils import t, n, s, z, w, k, get_shared_modules_dict, clean_outp
 import numpy as np
 import sympy
 import re
+import logging
+import traceback
 from sympy import (apart, fraction, solve, simplify, collect, Add, Piecewise,
                    Heaviside, DiracDelta, exp, sin, cos, tan, pi, I, oo, sympify, 
                    lambdify, integrate, laplace_transform, fourier_transform, 
@@ -9,6 +11,9 @@ from sympy import (apart, fraction, solve, simplify, collect, Add, Piecewise,
                    fourier_series, Integral, Sum, sinc, Max, Min, sinh, cosh, tanh, 
                    asin, acos, atan, log, KroneckerDelta, latex, symbols)
 from sympy.parsing.sympy_parser import parse_expr, standard_transformations, implicit_multiplication_application
+
+# Setup logger
+logger = logging.getLogger(__name__)
 
 # Define custom symbols and functions for parsing
 # 'j' is often used in engineering for sqrt(-1)
@@ -197,11 +202,14 @@ def compute_inverse_fourier(expr_str: str, domain: str = 'continuous'):
         clean_expr = re.sub(r'\bJ\b', 'I', clean_expr)
         clean_expr = re.sub(r'\bj\b', 'I', clean_expr)
         
-        expr = parse_signal(clean_expr, domain)
+        if domain == 'continuous':
+             expr = parse_signal(clean_expr, 'continuous')
+        else:
+             expr = parse_signal(clean_expr, 'discrete')
         
-        print(f"[compute_inverse_fourier] Domain: {domain}")
-        print(f"[compute_inverse_fourier] Input: {expr_str}")
-        print(f"[compute_inverse_fourier] Parsed: {expr}")
+        logger.debug(f"[compute_inverse_fourier] Domain: {domain}")
+        logger.debug(f"[compute_inverse_fourier] Input: {expr_str}")
+        logger.debug(f"[compute_inverse_fourier] Parsed: {expr}")
         
         if domain == 'discrete':
             # DTFT Inverse: X(e^jω) -> x[n]
@@ -227,19 +235,21 @@ def compute_inverse_fourier(expr_str: str, domain: str = 'continuous'):
             
             const = denom_expanded.subs([(exp_neg, 0), (exp_pos, 0)])
             
-            print(f"[compute_inverse_fourier] Coeff of exp(-Iw): {coeff_neg}, Coeff of exp(Iw): {coeff_pos}, Const: {const}")
+            const = denom_expanded.subs([(exp_neg, 0), (exp_pos, 0)])
+            
+            logger.debug(f"[compute_inverse_fourier] Coeff of exp(-Iw): {coeff_neg}, Coeff of exp(Iw): {coeff_pos}, Const: {const}")
             
             # Standard form: 1 / (1 - a*exp(-I*w)) where const=1, coeff_neg=-a
             if coeff_neg != 0 and coeff_pos == 0:
                 a = -coeff_neg / const
                 K = numer / const
-                print(f"[compute_inverse_fourier] Detected a = {a}")
+                logger.debug(f"[compute_inverse_fourier] Detected a = {a}")
                 
                 # Transform pair: K / (1 - a*exp(-I*w)) <-> K * a^n * u[n]
                 f = K * a**n * Heaviside(n)
-                print(f"[compute_inverse_fourier] Using DTFT pair: {f}")
+                logger.debug(f"[compute_inverse_fourier] Using DTFT pair: {f}")
             else:
-                print(f"[compute_inverse_fourier] Not standard DTFT form, trying numerical/general approach")
+                logger.debug(f"[compute_inverse_fourier] Not standard DTFT form, trying numerical/general approach")
                 # DTFT inverse is basically (1/2pi) * int(X * exp(jwn) dw) from -pi to pi
                 # SymPy doesn't have a direct DTFT inverse that works reliably with 'w'
                 # So we return a specialized message or try to use Z-transform logic if applicable
@@ -290,21 +300,21 @@ def compute_inverse_fourier(expr_str: str, domain: str = 'continuous'):
                     f = invert_ct_term(expanded)
                 
                 if f is None or f == 0:
-                    print(f"[compute_inverse_fourier] Partial fractions approach returned zero/None, trying SymPy")
+                    logger.debug(f"[compute_inverse_fourier] Partial fractions approach returned zero/None, trying SymPy")
                     # Try direct inverse if it's a simple rational form of w
                     f = inverse_fourier_transform(expr.subs(w, 2*pi*symbols('f')), symbols('f'), t)
             except Exception as e_apart:
-                print(f"[compute_inverse_fourier] apart(jw) failed: {e_apart}, trying SymPy")
+                logger.debug(f"[compute_inverse_fourier] apart(jw) failed: {e_apart}, trying SymPy")
                 f = inverse_fourier_transform(expr.subs(w, 2*pi*symbols('f')), symbols('f'), t)
         
         # Simplify and format
+        # Simplify and format
         f = simplify(f)
-        return latex(f).replace('\\theta', 'u').replace('**', '^').replace('I', 'j'), f
+        return clean_output_str(latex(f), domain), f
         
     except Exception as e:
-        print(f"[compute_inverse_fourier] ERROR: {e}")
-        import traceback
-        traceback.print_exc()
+        logger.error(f"[compute_inverse_fourier] ERROR: {e}")
+        logger.error(traceback.format_exc())
         return f"Inverse Fourier Failed: {str(e)}", None
 
 
@@ -352,7 +362,7 @@ def evaluate_frequency_response(expr_str: str, w_min: float = -10, w_max: float 
         }
         
     except Exception as e:
-        print(f"[evaluate_frequency_response] Error: {e}")
+        logger.error(f"[evaluate_frequency_response] Error: {e}")
         return {"magnitude": {"x": [], "y": []}, "phase": {"x": [], "y": []}}
 
 def generate_plot_data(expr_str_or_obj, t_min: float = -5, t_max: float = 5, num_points: int = 500, domain: str = 'continuous'):
@@ -405,7 +415,7 @@ def generate_plot_data(expr_str_or_obj, t_min: float = -5, t_max: float = 5, num
             return n_vals.tolist(), np.real(y_vals).tolist()
             
     except Exception as outer_e:
-        print(f"[generate_plot_data] Error: {outer_e}")
+        logger.error(f"[generate_plot_data] Error: {outer_e}")
         return [], []
 
 def compute_laplace(expr_str: str):
@@ -486,7 +496,7 @@ def compute_spectrum(expr_str: str, w_min: float = -10, w_max: float = 10, num_p
                     # Try direct numerical evaluation instead
                     # For finite-support or exponentially decaying signals
                     # Evaluate sum numerically for n = -50 to 50 (practical range)
-                    print("DTFT: Using numerical summation approach")
+                    logger.debug("DTFT: Using numerical summation approach")
                     
                     # Create a lambda function for x[n]
                     x_n_func = lambdify(n, expr, modules=['numpy'])
@@ -514,7 +524,7 @@ def compute_spectrum(expr_str: str, w_min: float = -10, w_max: float = 10, num_p
                     }
                     
             except Exception as dtft_error:
-                print(f"DTFT computation failed: {dtft_error}")
+                logger.debug(f"DTFT computation failed: {dtft_error}")
                 return None
         
         # Now simply evaluate X_jw at different ω values
@@ -544,13 +554,13 @@ def compute_spectrum(expr_str: str, w_min: float = -10, w_max: float = 10, num_p
                 "phase": {"x": w_vals.tolist(), "y": phase_vals.tolist()}
             }
         except Exception as eval_error:
-            print(f"Evaluation failed: {eval_error}")
+            logger.error(f"Evaluation failed: {eval_error}")
             return None
             
     except Exception as e:
-        print(f"Spectrum Analysis Failed: {e}")
-        import traceback
-        traceback.print_exc()
+    except Exception as e:
+        logger.error(f"Spectrum Analysis Failed: {e}")
+        logger.error(traceback.format_exc())
         return None
 
 def compute_fourier_series_coeffs(expr_str: str, period_T: float = 6.28, num_coeffs: int = 5):
@@ -583,7 +593,7 @@ def compute_fourier_series_coeffs(expr_str: str, period_T: float = 6.28, num_coe
             
         return coeffs
     except Exception as e:
-        print(f"FS Calculation Failed: {e}")
+        logger.error(f"FS Calculation Failed: {e}")
         return []
 
 def parse_transfer_function(expr_str: str, variable: str = 's'):
@@ -757,9 +767,8 @@ def compute_convolution(x_str: str, h_str: str, domain: str = 'continuous'):
             }
 
     except Exception as e:
-        print(f"Convolution Failed: {e}")
-        import traceback
-        traceback.print_exc()
+        logger.error(f"Convolution Failed: {e}")
+        logger.error(traceback.format_exc())
         return None
 
 

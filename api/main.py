@@ -76,6 +76,8 @@ def get_plot_data(req: PlotRequest):
         x, y = symbolic.generate_plot_data(req.expression, req.t_min, req.t_max, domain=req.domain)
         return {"x": x, "y": y}
     except Exception as e:
+        logger.error(f"Plot failed: {e}")
+        logger.error(traceback.format_exc())
         raise HTTPException(status_code=400, detail=str(e))
 
 @app.post("/transform")
@@ -92,6 +94,8 @@ def get_transform(req: TransformRequest):
         
         return {"latex": result}
     except Exception as e:
+        logger.error(f"Transform failed: {e}")
+        logger.error(traceback.format_exc())
         raise HTTPException(status_code=400, detail=str(e))
 
 @app.post("/spectrum")
@@ -103,6 +107,8 @@ def get_spectrum(req: SpectrumRequest):
              return {"magnitude": {"x": [], "y": []}, "phase": {"x": [], "y": []}}
         return data 
     except Exception as e:
+        logger.error(f"Spectrum failed: {e}")
+        logger.error(traceback.format_exc())
         raise HTTPException(status_code=400, detail=str(e))
 
 @app.post("/series")
@@ -111,6 +117,8 @@ def get_series(req: SeriesRequest):
         coeffs = symbolic.compute_fourier_series_coeffs(req.expression, req.period, req.num_coeffs)
         return {"coeffs": coeffs}
     except Exception as e:
+        logger.error(f"Series failed: {e}")
+        logger.error(traceback.format_exc())
         raise HTTPException(status_code=400, detail=str(e))
 
 @app.post("/convolution")
@@ -121,6 +129,8 @@ def get_convolution(req: ConvolutionRequest):
             raise HTTPException(status_code=400, detail="Convolution failed")
         return data
     except Exception as e:
+        logger.error(f"Convolution failed: {e}")
+        logger.error(traceback.format_exc())
         raise HTTPException(status_code=400, detail=str(e))
 
 class InverseRequest(BaseModel):
@@ -163,6 +173,8 @@ def get_inverse(req: InverseRequest):
             "time_plot": time_data
         }
     except Exception as e:
+         logger.error(f"Inverse failed: {e}")
+         logger.error(traceback.format_exc())
          raise HTTPException(status_code=400, detail=str(e))
 
 class TransferFunctionRequest(BaseModel):
@@ -178,6 +190,8 @@ def parse_transfer_function_endpoint(req: TransferFunctionRequest):
         result = symbolic.parse_transfer_function(req.expression, req.variable)
         return result
     except Exception as e:
+        logger.error(f"Transfer function parse failed: {e}")
+        logger.error(traceback.format_exc())
         raise HTTPException(status_code=400, detail=str(e))
 
 class SystemAnalysisRequest(BaseModel):
@@ -192,7 +206,8 @@ def analyze_system_endpoint(req: SystemAnalysisRequest):
         properties = system_analyzer.analyze_system(req.equation, req.domain)
         
         # 2. Determine Input and Output
-        input_str = req.input_equation if req.input_equation else ('d(t)' if req.domain == 'continuous' else 'd[n]')
+        # Handled in Pydantic now, but safeguard here
+        input_str = req.input_equation if req.input_equation is not None else ('d(t)' if req.domain == 'continuous' else 'd[n]')
         
         # 3. Calculate Input Plot
         try:
@@ -259,6 +274,8 @@ def fourier_analyze(req: FourierAnalysisRequest):
             
         return {"coeffs": coeffs}
     except Exception as e:
+        logger.error(f"Fourier Analyze failed: {e}")
+        logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/fourier/synthesize")
@@ -290,6 +307,8 @@ def fourier_synthesize(req: FourierSynthesisRequest):
             }
             
     except Exception as e:
+        logger.error(f"Fourier Synthesize failed: {e}")
+        logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -313,6 +332,8 @@ def detect_period_endpoint(req: PeriodDetectionRequest):
         
         return {"period": period, "message": message}
     except Exception as e:
+        logger.error(f"Period detection failed: {e}")
+        logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -328,6 +349,8 @@ def get_roc_surface(req: ROC3DRequest):
         )
         return data
     except Exception as e:
+        logger.error(f"ROC Surface failed: {e}")
+        logger.error(traceback.format_exc())
         raise HTTPException(status_code=400, detail=str(e))
 
 if __name__ == "__main__":

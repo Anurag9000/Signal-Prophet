@@ -3,6 +3,10 @@ import numpy as np
 from sympy import symbols, sympify, integrate, Sum, exp, pi, I, lambdify, Abs, arg, simplify, Function
 from sympy.parsing.sympy_parser import parse_expr, standard_transformations, implicit_multiplication_application
 from api.core.symbolic import parse_signal, t, n
+import logging
+import traceback
+
+logger = logging.getLogger(__name__)
 
 k = symbols('k')
 
@@ -39,7 +43,7 @@ def calculate_ctfs(signal_eq: str, T: float, k_min: int = -5, k_max: int = 5):
                 ak_num = complex(ak_sym.evalf())
                 ak_str = str(ak_sym).replace('**', '^').replace('I', 'j')
             except Exception as integ_err:
-                print(f"Integration failed for k={k_val}: {integ_err}")
+                logger.debug(f"Integration failed for k={k_val}: {integ_err}")
                 # Fallback to numerical integration if symbolic fails
                 try:
                     from sympy import lambdify
@@ -66,7 +70,8 @@ def calculate_ctfs(signal_eq: str, T: float, k_min: int = -5, k_max: int = 5):
         return coeffs
             
     except Exception as e:
-        print(f"Error calculating CTFS: {e}")
+        logger.error(f"Error calculating CTFS: {e}")
+        logger.error(traceback.format_exc())
         return []
 
 def calculate_inverse_ctfs(ak_eq: str, T: float, k_min: int = -5, k_max: int = 5):
@@ -100,7 +105,8 @@ def calculate_inverse_ctfs(ak_eq: str, T: float, k_min: int = -5, k_max: int = 5
         return xt_sym
         
     except Exception as e:
-        print(f"Error calculating Inverse CTFS: {e}")
+        logger.error(f"Error calculating Inverse CTFS: {e}")
+        logger.error(traceback.format_exc())
         return None
 
 def calculate_dtfs(signal_eq: str, N: int):
@@ -141,7 +147,7 @@ def calculate_dtfs(signal_eq: str, N: int):
             
         return coeffs
     except Exception as e:
-        print(f"Error calculating DTFS: {e}")
+        logger.error(f"Error calculating DTFS: {e}")
         return []
 
 def calculate_inverse_dtfs(ak_eq: str, N: int):
@@ -182,5 +188,5 @@ def calculate_inverse_dtfs(ak_eq: str, N: int):
             
         return x_values
     except Exception as e:
-        print(f"Error calculating Inverse DTFS: {e}")
+        logger.error(f"Error calculating Inverse DTFS: {e}")
         return []

@@ -5,8 +5,12 @@ Analyzes: Linearity, Time-Invariance, Causality, Memory, Stability, Invertibilit
 
 from api.core.utils import t, n, s, z, w, k, get_shared_modules_dict, clean_output_str
 import re
+import logging
+import traceback
 from sympy import symbols, sympify, diff, simplify, solve, Abs, DiracDelta, Heaviside, Function, integrate, Sum, oo, Integral, KroneckerDelta, Add, sin, cos, exp, log
 from sympy.parsing.sympy_parser import parse_expr, standard_transformations, implicit_multiplication_application
+
+logger = logging.getLogger(__name__)
 
 def analyze_system(equation: str, domain: str = 'continuous'):
     """
@@ -245,7 +249,8 @@ def calculate_impulse_response(eq: str, domain: str):
             
         return h_expr
     except Exception as e:
-        print(f"Error calculating impulse response: {e}")
+        logger.error(f"Error calculating impulse response: {e}")
+        logger.error(traceback.format_exc())
         return None
 
 def check_stability_bibo(h_expr, domain: str):

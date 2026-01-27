@@ -50,12 +50,14 @@ const ROCExplorer = () => {
     // Transfer function input
     const [transferFunction, setTransferFunction] = useState('');
     const [tfLoading, setTfLoading] = useState(false);
+    const [parseError, setParseError] = useState(null);
 
     // Handle transfer function parsing
     const handleParseTF = async () => {
         if (!transferFunction.trim()) return;
 
         setTfLoading(true);
+        setParseError(null);
         try {
             const variable = domain === 'laplace' ? 's' : 'z';
             const res = await axios.post(`${API_URL}/parse_transfer_function`, {
@@ -65,14 +67,14 @@ const ROCExplorer = () => {
             const data = res.data;
 
             if (data.error) {
-                alert(`Error: ${data.error}`);
+                setParseError(`Error: ${data.error}`);
             } else {
                 setPoles(data.poles || []);
                 setZeros(data.zeros || []);
                 setUpdateKey(prev => prev + 1);
             }
         } catch (e) {
-            alert(`Failed to parse: ${e.response?.data?.detail || e.message}`);
+            setParseError(`Failed to parse: ${e.response?.data?.detail || e.message}`);
         } finally {
             setTfLoading(false);
         }
@@ -485,6 +487,11 @@ const ROCExplorer = () => {
                         <p className="text-xs text-slate-500 mt-2">
                             Use <code className="bg-slate-100 px-1 rounded">j</code> or <code className="bg-slate-100 px-1 rounded">i</code> for imaginary unit
                         </p>
+                        {parseError && (
+                            <div className="mt-2 text-xs text-red-600 font-medium bg-red-50 p-2 rounded border border-red-100">
+                                {parseError}
+                            </div>
+                        )}
                     </div>
 
                     <hr className="border-slate-200 my-4" />
