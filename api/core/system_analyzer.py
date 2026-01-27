@@ -364,8 +364,19 @@ def check_stability_bibo(h_expr, domain: str):
                 n_test = np.arange(-100, 101)
                 h_vals = np.abs(h_fn(n_test))
                 
-                if np.sum(h_vals) > 1e5: # arbitrary large threshold
-                     return {'status': 'no', 'explanation': 'Unstable: Sum of |h[n]| is very large'}
+                # Use relative threshold based on peak value
+                peak_val = np.max(h_vals)
+                sum_val = np.sum(h_vals)
+                
+                # If peak is very small, system is essentially zero (stable)
+                if peak_val < 1e-10:
+                    return {'status': 'yes', 'explanation': 'Stable: Response is effectively zero'}
+                
+                # Check if sum is excessively large relative to number of samples
+                # For a stable system, average magnitude should decay
+                avg_magnitude = sum_val / len(h_vals)
+                if avg_magnitude > peak_val * 0.5:  # If average is too close to peak, not decaying
+                     return {'status': 'no', 'explanation': 'Unstable: Sum of |h[n]| is very large (not decaying)'}
                 
                 if h_vals[-1] > h_vals[len(h_vals)//2] * 2:
                      return {'status': 'no', 'explanation': 'Unstable: Growing response'}
@@ -410,29 +421,37 @@ def calculate_system_response(equation: str, input_str: str, domain: str):
     """
     from api.core import symbolic
     
-    # 1. Parse Input Expression
-    input_expr = symbolic.parse_signal(input_str, domain)
-    
-    # 2. Parse System Equation
-    var = t if domain == 'continuous' else n
-    x_func = Function('x')
-    x_sym = symbols('x')
-    
-    # Use symbolic.parse_signal to get the base expression
-    expr = symbolic.parse_signal(equation, domain)
-    
-    # Handle functional 'x(t)' or 'x[n]'
-    # We want to replace all occurrences of x(...) with input_expr evaluating its argument
-    output_expr = expr.replace(x_func, lambda arg: input_expr.subs(var, arg))
-    
-    # Handle symbolic 'x' if it was parsed as a symbol
-    output_expr = output_expr.subs(x_sym, input_expr)
-    
-    # 3. Generate Data
-    px, py = symbolic.generate_plot_data(output_expr, -5, 10, domain=domain)
-    
-    output_str = str(output_expr).replace('**', '^').replace('DiracDelta', 'd').replace('Heaviside', 'u')
-    if domain == 'discrete':
-        output_str = output_str.replace('(', '[').replace(')', ']')
+    try:
+        # 1. Parse Input Expression
+        input_expr = symbolic.parse_signal(input_str, domain)
         
-    return output_str, {"x": px, "y": py}
+        # 2. Parse System Equation
+        var = t if domain == 'continuous' else n
+        x_func = Function('x')
+        x_sym = symbols('x')
+        
+        # Use symbolic.parse_signal to get the base expression
+        expr = symbolic.parse_signal(equation, domain)
+        
+        # Handle functional 'x(t)' or 'x[n]'
+        # We want to replace all occurrences of x(...) with input_expr evaluating its argument
+        output_expr = expr.replace(x_func, lambda arg: input_expr.subs(var, arg))
+        
+        # Handle symbolic 'x' if it was parsed as a symbol
+        output_expr = output_expr.subs(x_sym, input_expr)
+        
+        # 3. Generate Data
+        px, py = symbolic.generate_plot_data(output_expr, -5, 10, domain=domain)
+        
+        # 4. Format output string with proper bracket notation for discrete
+        output_str = str(output_expr).replace('**', '^').replace('DiracDelta', 'd').replace('Heaviside', 'u')
+        if domain == 'discrete':
+            # Use regex for selective bracket replacement
+            import re
+            output_str = re.sub(r'\((t|n|k)([\+\-]\d+)?\)', r'[\1\2]', output_str)
+            
+        return output_str, {"x": px, "y": py}
+    except Exception as e:
+        logger.error(f"Error in calculate_system_response: {e}")
+        logger.error(traceback.format_exc())
+        return "Error calculating response", {"x": [], "y": []}

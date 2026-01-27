@@ -729,8 +729,10 @@ def compute_convolution(x_str: str, h_str: str, domain: str = 'continuous'):
             h_expr = parse_signal(h_str, 'continuous')
             
             # Use visual proxies for evaluating distributions
-            x_vis = x_expr.replace(DiracDelta, VisualDirac())
-            h_vis = h_expr.replace(DiracDelta, VisualDirac())
+            # Create a single VisualDirac instance for continuous domain
+            visual_dirac_continuous = VisualDirac('continuous')
+            x_vis = x_expr.replace(DiracDelta, lambda x: visual_dirac_continuous(x))
+            h_vis = h_expr.replace(DiracDelta, lambda x: visual_dirac_continuous(x))
             
             x_fn = lambdify(t, x_vis, modules=modules_dict)
             h_fn = lambdify(t, h_vis, modules=modules_dict)
@@ -792,8 +794,13 @@ def compute_convolution(x_str: str, h_str: str, domain: str = 'continuous'):
             x_expr = parse_signal(x_str, 'discrete')
             h_expr = parse_signal(h_str, 'discrete')
             
-            x_fn = lambdify(n, x_expr, modules=modules_dict)
-            h_fn = lambdify(n, h_expr, modules=modules_dict)
+            # For discrete, use KroneckerDelta visual proxy
+            visual_dirac_discrete = VisualDirac('discrete')
+            x_vis = x_expr.replace(KroneckerDelta, lambda *args: visual_dirac_discrete(args[0] if args else 0))
+            h_vis = h_expr.replace(KroneckerDelta, lambda *args: visual_dirac_discrete(args[0] if args else 0))
+            
+            x_fn = lambdify(n, x_vis, modules=modules_dict)
+            h_fn = lambdify(n, h_vis, modules=modules_dict)
 
             sx = estimate_support_discrete(x_fn)
             sh = estimate_support_discrete(h_fn)

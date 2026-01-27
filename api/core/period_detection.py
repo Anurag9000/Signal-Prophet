@@ -41,10 +41,15 @@ def detect_period_ct(signal_eq: str):
     except Exception as e:
         return None, f"Period detection failed: {str(e)}"
 
-def detect_period_dt(signal_eq: str, max_period_search=100):
+def detect_period_dt(signal_eq: str, max_period_search=200, tolerance=1e-5):
     """
     Detect period N for discrete-time signals.
     Returns: (period: int|None, message: str)
+    
+    Args:
+        signal_eq: Signal equation string
+        max_period_search: Maximum period to search for (default 200, increased from 100)
+        tolerance: Tolerance for period detection (default 1e-5)
     """
     try:
         from api.core.symbolic import parse_signal

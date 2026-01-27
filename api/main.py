@@ -17,16 +17,15 @@ app = FastAPI(title="Signals & Systems API")
 
 # Setup generic CORS for development
 # In production, this should be restricted via environment variables
-origins = [
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-    "http://localhost:3000",
-    "https://Anurag9000.github.io"
-]
+allowed_origins_env = os.getenv("ALLOWED_ORIGINS", "*")
+if allowed_origins_env == "*":
+    allowed_origins_list = ["*"]
+else:
+    allowed_origins_list = [origin.strip() for origin in allowed_origins_env.split(",")]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], # Allow all for robust dev experience as requested
+    allow_origins=allowed_origins_list,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -38,6 +37,13 @@ class PlotRequest(BaseModel):
     t_min: float = -5.0
     t_max: float = 5.0
     domain: str = "continuous" # 'continuous' or 'discrete'
+    
+    @property
+    def validated_range(self):
+        """Ensure t_min < t_max"""
+        if self.t_min >= self.t_max:
+            raise ValueError("t_min must be less than t_max")
+        return True
 
 class TransformRequest(BaseModel):
     expression: str

@@ -48,13 +48,16 @@ def calculate_ctfs(signal_eq: str, T: float, k_min: int = -5, k_max: int = 5):
                 try:
                     from sympy import lambdify
                     f_num = lambdify(t, term, modules=['numpy', 'sympy'])
-                    # Simple numerical integration over one period
-                    t_vals = np.linspace(-float(T)/2, float(T)/2, 1000)
+                    # Adaptive numerical integration based on period
+                    num_points = max(1000, int(float(T) * 100))  # More points for longer periods
+                    num_points = min(num_points, 10000)  # Cap at 10000 for performance
+                    t_vals = np.linspace(-float(T)/2, float(T)/2, num_points)
                     y_vals = f_num(t_vals)
                     dt = t_vals[1] - t_vals[0]
                     ak_num = np.sum(y_vals) * dt / float(T)
                     ak_str = f"{ak_num.real:.4f} + {ak_num.imag:.4f}j (Numerical)"
-                except:
+                except Exception as num_err:
+                    logger.warning(f"Numerical integration also failed for k={k_val}: {num_err}")
                     ak_num = 0j
                     ak_str = "Integration Failed"
             
