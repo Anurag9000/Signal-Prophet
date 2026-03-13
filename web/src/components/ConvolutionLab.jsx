@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { BlockMath } from 'react-katex';
 import axios from 'axios';
 import Plot from 'react-plotly.js';

@@ -49,15 +49,23 @@ def parse_signal(expr_str: str, domain: str = 'continuous'):
     
     expr_str = convert_abs_notation(expr_str)
     
+    # Pre-processing: Convert ^ to ** (engineering/math notation for exponentiation)
+    # Must be done before any other substitutions to avoid XOR interpretation
+    expr_str = expr_str.replace('^', '**')
+    
     # Pre-processing for standard engineering notation
     # Replace u(t) with Heaviside(t)
     # Replace d(t) with DiracDelta(t)
     # Handle both () and [] for discrete/continuous convenience
     
-    # More robust substitution for engineering aliases
-    clean_expr = re.sub(r'\bu\s*[\(\[]', 'Heaviside(', expr_str)
-    clean_expr = re.sub(r'\bd\s*[\(\[]', 'DiracDelta(', clean_expr)
-    clean_expr = re.sub(r'\bδ\s*[\(\[]', 'DiracDelta(', clean_expr)
+    def replace_engineering_aliases(source: str, alias: str, target: str) -> str:
+        pattern = rf'\b{alias}\s*([\(\[])\s*([^\)\]]+?)\s*([\)\]])'
+        return re.sub(pattern, lambda match: f'{target}({match.group(2)})', source)
+
+    # Normalize engineering aliases while preserving the enclosed argument.
+    clean_expr = replace_engineering_aliases(expr_str, 'u', 'Heaviside')
+    clean_expr = replace_engineering_aliases(clean_expr, 'd', 'DiracDelta')
+    clean_expr = replace_engineering_aliases(clean_expr, 'δ', 'DiracDelta')
     
     # Normalize brackets for discrete compatibility Only for function calls like x[n] -> x(n)
     # This prevents breaking list definitions if they exist

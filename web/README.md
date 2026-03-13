@@ -1,16 +1,21 @@
-# React + Vite
+# Frontend Configuration
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+The frontend does not hardcode backend or base-path values.
 
-Currently, two official plugins are available:
+## Environment
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+Set these values in your shell or in `web/.env.local`:
 
-## React Compiler
+- `VITE_API_URL`: Backend origin for API requests.
+- `VITE_BASE_PATH`: Optional deployment base path. Defaults to `/`.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Development
 
-## Expanding the ESLint configuration
+```bash
+cd web
+cp .env.local.example .env.local
+npm install
+npm run dev
+```
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+Vite will print the active local URL when the dev server starts.

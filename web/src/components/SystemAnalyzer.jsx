@@ -5,6 +5,25 @@ import axios from 'axios';
 import Visualizer from './Visualizer';
 import { API_URL } from '../config';
 
+const PropertyRow = ({ name, status, explanation }) => (
+    <tr className="border-b border-slate-200 hover:bg-slate-50 transition">
+        <td className="px-6 py-4 font-semibold text-slate-700">{name}</td>
+        <td className="px-6 py-4">
+            <div className="flex items-center gap-2">
+                {status === 'yes' && <CheckCircle size={20} className="text-green-600" />}
+                {status === 'no' && <XCircle size={20} className="text-red-600" />}
+                {status === 'unknown' && <AlertCircle size={20} className="text-yellow-600" />}
+                <span className={`font-medium ${status === 'yes' ? 'text-green-700' :
+                    status === 'no' ? 'text-red-700' : 'text-yellow-700'
+                    }`}>
+                    {status === 'yes' ? 'YES' : status === 'no' ? 'NO' : 'UNKNOWN'}
+                </span>
+            </div>
+        </td>
+        <td className="px-6 py-4 text-sm text-slate-600">{explanation}</td>
+    </tr>
+);
+
 const SystemAnalyzer = () => {
     const [domain, setDomain] = useState('continuous');
     const [systemEq, setSystemEq] = useState('2*x(t)');
@@ -54,25 +73,6 @@ const SystemAnalyzer = () => {
         }
         setLoading(false);
     };
-
-    const PropertyRow = ({ name, status, explanation }) => (
-        <tr className="border-b border-slate-200 hover:bg-slate-50 transition">
-            <td className="px-6 py-4 font-semibold text-slate-700">{name}</td>
-            <td className="px-6 py-4">
-                <div className="flex items-center gap-2">
-                    {status === 'yes' && <CheckCircle size={20} className="text-green-600" />}
-                    {status === 'no' && <XCircle size={20} className="text-red-600" />}
-                    {status === 'unknown' && <AlertCircle size={20} className="text-yellow-600" />}
-                    <span className={`font-medium ${status === 'yes' ? 'text-green-700' :
-                        status === 'no' ? 'text-red-700' : 'text-yellow-700'
-                        }`}>
-                        {status === 'yes' ? 'YES' : status === 'no' ? 'NO' : 'UNKNOWN'}
-                    </span>
-                </div>
-            </td>
-            <td className="px-6 py-4 text-sm text-slate-600">{explanation}</td>
-        </tr>
-    );
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 p-8">

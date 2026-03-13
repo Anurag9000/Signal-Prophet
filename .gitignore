@@ -3,13 +3,20 @@ __pycache__/
 *.py[cod]
 *$py.class
 venv/
+.venv/
+.python-version
 .env
 .pytest_cache/
+*.log
+*.out
+*.pid
 
 # Node/Frontend
 web/node_modules/
 web/dist/
 web/.env
+web/.env.local
+web/.env.*.local
 
 # OS
 .DS_Store

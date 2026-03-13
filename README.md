@@ -6,12 +6,12 @@ Built based on the curriculum of *Signals and Systems* by Oppenheim & Willsky.
 
 ![Status](https://img.shields.io/badge/Status-Active-success)
 ![Stack](https://img.shields.io/badge/Stack-React%20%7C%20FastAPI%20%7C%20SymPy-blue)
-[![Live Demo](https://img.shields.io/badge/demo-online-green.svg)](https://Anurag9000.github.io/Signal-Prophet/)
+[![Live Demo](https://img.shields.io/badge/demo-online-green.svg)](<YOUR_DEPLOYMENT_URL>)
 
 ## 🌐 Try It Live
 Click the button below to launch the application immediately in your browser:
 
-### [👉 Launch SignalProphet 👈](https://Anurag9000.github.io/Signal-Prophet/)
+### [👉 Launch SignalProphet 👈](<YOUR_DEPLOYMENT_URL>)
 
 ---
 
@@ -62,23 +62,31 @@ If you want to run the code on your own machine for development:
     ```bash
     # Install Python dependencies
     pip install -r api/requirements.txt
-    
+
+    # Configure runtime values for your environment
+    export HOST=0.0.0.0
+    export PORT=8000
+
     # Start the analysis engine
     python -m api.main
     ```
-    *Server will start at `http://localhost:8000`*
+    The backend listens on the configured `HOST` and `PORT`.
 
 3.  **Frontend Setup** (In a new terminal)
     ```bash
     cd web
-    
+
+    # Point the frontend at the backend for your environment
+    cp .env.local.example .env.local
+    # Edit .env.local and set VITE_API_URL
+
     # Install dependencies
     npm install
-    
+
     # Run the interface
     npm run dev
     ```
-    *Open `http://localhost:5173` in your browser.*
+    Vite will print the local preview URL for the current environment.
 
 ---
 

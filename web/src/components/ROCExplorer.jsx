@@ -19,7 +19,6 @@ ChartJS.register(LinearScale, PointElement, LineElement, Tooltip, Legend);
 const ROCExplorer = () => {
     const [domain, setDomain] = useState('laplace'); // 'laplace' | 'z'
     const [causality, setCausality] = useState('causal'); // 'causal' | 'anticausal'
-    const [stability, setStability] = useState('stable'); // 'stable' | 'unstable'
     const [poles, setPoles] = useState([]);
     const [zeros, setZeros] = useState([]);
     const [newPole, setNewPole] = useState({ r: -1, i: 0 });
@@ -154,7 +153,7 @@ const ROCExplorer = () => {
             }
         }
         setAnalysis({ stable: isStable, html, valid: isValid });
-    }, [poles, zeros, domain, causality, stability, updateKey]);
+    }, [poles, zeros, domain, causality, updateKey]);
 
     // Fetch 3D Data when needed
     useEffect(() => {
