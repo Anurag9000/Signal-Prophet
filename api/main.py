@@ -235,7 +235,8 @@ def analyze_system_endpoint(req: SystemAnalysisRequest):
         impulse_plot = {"x": [], "y": []}
         if properties and 'impulse_response' in properties:
              try:
-                 h_px, h_py = symbolic.generate_plot_data(properties['impulse_response'], -5, 10, domain=req.domain)
+                 impulse_expr = system_analyzer.calculate_impulse_response(req.equation, req.domain)
+                 h_px, h_py = symbolic.generate_plot_data(impulse_expr, -5, 10, domain=req.domain)
                  impulse_plot = {"x": h_px, "y": h_py}
              except: pass
 

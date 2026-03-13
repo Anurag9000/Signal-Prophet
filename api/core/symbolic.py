@@ -777,9 +777,10 @@ def compute_convolution(x_str: str, h_str: str, domain: str = 'continuous'):
                     H_shifted = np.array([float(h_fn(ti - v)) for v in tau_vals])
                 if np.isscalar(H_shifted): H_shifted = np.full_like(tau_vals, H_shifted)
                 
-                # Numerical integration (trapz)
+                # Numerical integration across NumPy versions.
                 product = X_tau * H_shifted
-                val = np.trapz(product, tau_vals)
+                integrator = getattr(np, 'trapezoid', None) or getattr(np, 'trapz')
+                val = integrator(product, tau_vals)
                 y_vals.append(val)
                 
                 frames.append({
