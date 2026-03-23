@@ -11,11 +11,9 @@ Built based on the curriculum of *Signals and Systems* by Oppenheim & Willsky.
 ## 🌐 Try It Live
 Click the button below to launch the application immediately in your browser:
 
-### [👉 Launch SignalProphet 👈](<YOUR_DEPLOYMENT_URL>)
-
----
-
 ## ✨ Features
+
+![SignalProphet Architecture](architecture_diagram.png)
 
 - **System Analyzer**:
     - Check properties: **Linearity**, **Time-Invariance**, **Causality**, **Memory**, **Stability** (BIBO), **Invertibility**.
